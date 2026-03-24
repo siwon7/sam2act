@@ -12,6 +12,8 @@ _C.exp_id = "def"
 _C.resume = ""
 # bs per device, effective bs is scaled by num device
 _C.bs = 4
+# number of micro-batches to accumulate before each optimizer update
+_C.grad_accum_steps = 1
 _C.epochs = 20
 # number of dataloader workers, >= 0
 _C.num_workers = 0
@@ -38,6 +40,7 @@ _C.peract.add_rgc_loss = True
 _C.peract.num_rotation_classes = 72
 _C.peract.amp = False
 _C.peract.bnb = False
+_C.peract.grad_clip_norm = 1.0
 _C.peract.transform_augmentation = True
 _C.peract.transform_augmentation_xyz = [0.1, 0.1, 0.1]
 _C.peract.transform_augmentation_rpy = [0.0, 0.0, 20.0]

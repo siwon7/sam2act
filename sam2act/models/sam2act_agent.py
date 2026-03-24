@@ -3,6 +3,7 @@
 # Licensed under the NVIDIA Source Code License [see LICENSE for details].
 
 import pprint
+from contextlib import nullcontext
 
 import clip
 import torch
@@ -306,6 +307,7 @@ class SAM2Act_Agent:
         lr_cos_dec: bool = False,
         cos_dec_max_step: int = 60000,
         warmup_steps: int = 0,
+        grad_clip_norm: float = 0.0,
         image_resolution: list = None,
         lambda_weight_l2: float = 0.0,
         transform_augmentation: bool = True,
@@ -367,6 +369,7 @@ class SAM2Act_Agent:
         self.warmup_steps = warmup_steps
         self.lr_cos_dec = lr_cos_dec
         self.cos_dec_max_step = cos_dec_max_step
+        self.grad_clip_norm = grad_clip_norm
         self.scene_bounds = scene_bounds
         self.cameras = cameras
         self.move_pc_in_bound = move_pc_in_bound
@@ -585,6 +588,9 @@ class SAM2Act_Agent:
         backprop: bool = True,
         eval_log: bool = False,
         reset_log: bool = False,
+        grad_accum_divisor: int = 1,
+        reset_grad: bool = True,
+        optimizer_step: bool = True,
     ) -> dict:
         assert replay_sample["rot_grip_action_indicies"].shape[1:] == (1, 4)
         assert replay_sample["ignore_collisions"].shape[1:] == (1, 1)
@@ -711,134 +717,148 @@ class SAM2Act_Agent:
 
             dyn_cam_info = None
 
-        with autocast(enabled=self.amp):
-            (
-                action_rot_x_one_hot,
-                action_rot_y_one_hot,
-                action_rot_z_one_hot,
-                action_grip_one_hot,  # (bs, 2)
-                action_collision_one_hot,  # (bs, 2)
-            ) = self._get_one_hot_expert_actions(
-                bs, action_rot, action_grip, action_ignore_collisions, device=self._device
-            )
+        grad_accum_divisor = max(1, int(grad_accum_divisor))
+        ddp_sync_context = (
+            self._network.no_sync()
+            if backprop
+            and not optimizer_step
+            and isinstance(self._network, DistributedDataParallel)
+            else nullcontext()
+        )
 
-            if self.rot_ver == 1:
-                rot_x_y = torch.cat(
-                    [
-                        action_rot_x_one_hot.argmax(dim=-1, keepdim=True),
-                        action_rot_y_one_hot.argmax(dim=-1, keepdim=True),
-                    ],
-                    dim=-1,
-                )
-                if self.rot_x_y_aug != 0:
-                    # add random interger between -rot_x_y_aug and rot_x_y_aug to rot_x_y
-                    rot_x_y += torch.randint(
-                        -self.rot_x_y_aug, self.rot_x_y_aug, size=rot_x_y.shape
-                    ).to(rot_x_y.device)
-                    rot_x_y %= self._num_rotation_classes
-
-            # hm_gt = self.get_gt_hm(
-            #     wpt_local, dyn_cam_info, dims=(bs, nc, h, w)
-            # )
-
-            out = self._network(
-                pc=pc,
-                img_feat=img_feat,
-                proprio=proprio,
-                lang_emb=lang_goal_embs,
-                img_aug=img_aug,
-                wpt_local=wpt_local if self._network.training else None,
-                rot_x_y=rot_x_y if self.rot_ver == 1 else None,
-                # hm_gt=hm_gt,
-            )
-
-            q_trans, rot_q, grip_q, collision_q, y_q, pts = self.get_q(
-                out, dims=(bs, nc, h, w)
-            )
-
-            action_trans = self.get_action_trans(
-                wpt_local, pts, out, dyn_cam_info, dims=(bs, nc, h, w)
-            )
-
-        loss_log = {}
-        if backprop:
+        with ddp_sync_context:
             with autocast(enabled=self.amp):
-                # cross-entropy loss
-                trans_loss = self._cross_entropy_loss(q_trans, action_trans).mean()
-                rot_loss_x = rot_loss_y = rot_loss_z = 0.0
-                grip_loss = 0.0
-                collision_loss = 0.0
-                if not self.use_memory:
-                    if self.add_rgc_loss:
-                        rot_loss_x = self._cross_entropy_loss(
-                            rot_q[
-                                :,
-                                0 * self._num_rotation_classes : 1 * self._num_rotation_classes,
-                            ],
-                            action_rot_x_one_hot.argmax(-1),
-                        ).mean()
+                (
+                    action_rot_x_one_hot,
+                    action_rot_y_one_hot,
+                    action_rot_z_one_hot,
+                    action_grip_one_hot,  # (bs, 2)
+                    action_collision_one_hot,  # (bs, 2)
+                ) = self._get_one_hot_expert_actions(
+                    bs, action_rot, action_grip, action_ignore_collisions, device=self._device
+                )
 
-                        rot_loss_y = self._cross_entropy_loss(
-                            rot_q[
-                                :,
-                                1 * self._num_rotation_classes : 2 * self._num_rotation_classes,
-                            ],
-                            action_rot_y_one_hot.argmax(-1),
-                        ).mean()
-
-                        rot_loss_z = self._cross_entropy_loss(
-                            rot_q[
-                                :,
-                                2 * self._num_rotation_classes : 3 * self._num_rotation_classes,
-                            ],
-                            action_rot_z_one_hot.argmax(-1),
-                        ).mean()
-
-                        grip_loss = self._cross_entropy_loss(
-                            grip_q,
-                            action_grip_one_hot.argmax(-1),
-                        ).mean()
-
-                        collision_loss = self._cross_entropy_loss(
-                            collision_q, action_collision_one_hot.argmax(-1)
-                        ).mean()
-
-                    total_loss = (
-                        trans_loss
-                        + rot_loss_x
-                        + rot_loss_y
-                        + rot_loss_z
-                        + grip_loss
-                        + collision_loss
+                if self.rot_ver == 1:
+                    rot_x_y = torch.cat(
+                        [
+                            action_rot_x_one_hot.argmax(dim=-1, keepdim=True),
+                            action_rot_y_one_hot.argmax(dim=-1, keepdim=True),
+                        ],
+                        dim=-1,
                     )
+                    if self.rot_x_y_aug != 0:
+                        # add random interger between -rot_x_y_aug and rot_x_y_aug to rot_x_y
+                        rot_x_y += torch.randint(
+                            -self.rot_x_y_aug, self.rot_x_y_aug, size=rot_x_y.shape
+                        ).to(rot_x_y.device)
+                        rot_x_y %= self._num_rotation_classes
 
-                else:
+                # hm_gt = self.get_gt_hm(
+                #     wpt_local, dyn_cam_info, dims=(bs, nc, h, w)
+                # )
 
-                    total_loss = trans_loss
+                out = self._network(
+                    pc=pc,
+                    img_feat=img_feat,
+                    proprio=proprio,
+                    lang_emb=lang_goal_embs,
+                    img_aug=img_aug,
+                    wpt_local=wpt_local if self._network.training else None,
+                    rot_x_y=rot_x_y if self.rot_ver == 1 else None,
+                    # hm_gt=hm_gt,
+                )
 
+                q_trans, rot_q, grip_q, collision_q, y_q, pts = self.get_q(
+                    out, dims=(bs, nc, h, w)
+                )
 
-            self._optimizer.zero_grad(set_to_none=True)
-            self.scaler.scale(total_loss).backward()
+                action_trans = self.get_action_trans(
+                    wpt_local, pts, out, dyn_cam_info, dims=(bs, nc, h, w)
+                )
 
-            # self.scaler.unscale_(self._optimizer)
-            # torch.nn.utils.clip_grad_norm_(self._network.parameters(), max_norm=0.1)
+            loss_log = {}
+            if backprop:
+                with autocast(enabled=self.amp):
+                    # cross-entropy loss
+                    trans_loss = self._cross_entropy_loss(q_trans, action_trans).mean()
+                    rot_loss_x = rot_loss_y = rot_loss_z = 0.0
+                    grip_loss = 0.0
+                    collision_loss = 0.0
+                    if not self.use_memory:
+                        if self.add_rgc_loss:
+                            rot_loss_x = self._cross_entropy_loss(
+                                rot_q[
+                                    :,
+                                    0 * self._num_rotation_classes : 1 * self._num_rotation_classes,
+                                ],
+                                action_rot_x_one_hot.argmax(-1),
+                            ).mean()
 
-            self.scaler.step(self._optimizer)
-            self.scaler.update()
-            self._lr_sched.step()
+                            rot_loss_y = self._cross_entropy_loss(
+                                rot_q[
+                                    :,
+                                    1 * self._num_rotation_classes : 2 * self._num_rotation_classes,
+                                ],
+                                action_rot_y_one_hot.argmax(-1),
+                            ).mean()
 
-            loss_log = {
-                "total_loss": total_loss.item(),
-                "trans_loss": trans_loss.item(),
-                "rot_loss_x": rot_loss_x.item() if not self.use_memory else None,
-                "rot_loss_y": rot_loss_y.item() if not self.use_memory else None,
-                "rot_loss_z": rot_loss_z.item() if not self.use_memory else None,
-                "grip_loss": grip_loss.item() if not self.use_memory else None,
-                "collision_loss": collision_loss.item() if not self.use_memory else None,
-                "lr": self._optimizer.param_groups[0]["lr"],
-            }
-            manage_loss_log(self, loss_log, reset_log=reset_log)
-            return_out.update(loss_log)
+                            rot_loss_z = self._cross_entropy_loss(
+                                rot_q[
+                                    :,
+                                    2 * self._num_rotation_classes : 3 * self._num_rotation_classes,
+                                ],
+                                action_rot_z_one_hot.argmax(-1),
+                            ).mean()
+
+                            grip_loss = self._cross_entropy_loss(
+                                grip_q,
+                                action_grip_one_hot.argmax(-1),
+                            ).mean()
+
+                            collision_loss = self._cross_entropy_loss(
+                                collision_q, action_collision_one_hot.argmax(-1)
+                            ).mean()
+
+                        total_loss = (
+                            trans_loss
+                            + rot_loss_x
+                            + rot_loss_y
+                            + rot_loss_z
+                            + grip_loss
+                            + collision_loss
+                        )
+
+                    else:
+                        total_loss = trans_loss
+
+                if reset_grad:
+                    self._optimizer.zero_grad(set_to_none=True)
+
+                scaled_loss = total_loss / grad_accum_divisor
+                self.scaler.scale(scaled_loss).backward()
+
+                if optimizer_step:
+                    if self.grad_clip_norm and self.grad_clip_norm > 0:
+                        self.scaler.unscale_(self._optimizer)
+                        torch.nn.utils.clip_grad_norm_(
+                            self._network.parameters(), max_norm=self.grad_clip_norm
+                        )
+                    self.scaler.step(self._optimizer)
+                    self.scaler.update()
+                    self._lr_sched.step()
+
+                loss_log = {
+                    "total_loss": total_loss.item(),
+                    "trans_loss": trans_loss.item(),
+                    "rot_loss_x": rot_loss_x.item() if not self.use_memory else None,
+                    "rot_loss_y": rot_loss_y.item() if not self.use_memory else None,
+                    "rot_loss_z": rot_loss_z.item() if not self.use_memory else None,
+                    "grip_loss": grip_loss.item() if not self.use_memory else None,
+                    "collision_loss": collision_loss.item() if not self.use_memory else None,
+                    "lr": self._optimizer.param_groups[0]["lr"],
+                }
+                manage_loss_log(self, loss_log, reset_log=reset_log)
+                return_out.update(loss_log)
 
         if eval_log:
             with torch.no_grad():

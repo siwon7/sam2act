@@ -4,6 +4,7 @@
 
 import os
 import time
+import math
 import tqdm
 import random
 import yaml
@@ -71,16 +72,32 @@ def get_model_size(model):
 
 
 # new train takes the dataset as input
-def train(agent, dataset, training_iterations, log_iter, rank=0, node_rank=0, ifwandb=False):
+def train(
+    agent,
+    dataset,
+    training_iterations,
+    log_iter,
+    grad_accum_steps=1,
+    rank=0,
+    node_rank=0,
+    ifwandb=False,
+):
     agent.train()
     log = defaultdict(list)
 
     data_iter = iter(dataset)
     iter_command = range(training_iterations)
+    grad_accum_steps = max(1, int(grad_accum_steps))
 
     for iteration in tqdm.tqdm(
         iter_command, disable=(rank != 0), position=0, leave=True
     ):
+        accum_idx = iteration % grad_accum_steps
+        accum_start = iteration - accum_idx
+        accum_divisor = min(grad_accum_steps, training_iterations - accum_start)
+        optimizer_step = (
+            accum_idx == accum_divisor - 1 or iteration == training_iterations - 1
+        )
 
         raw_batch = next(data_iter)
         batch = {
@@ -92,6 +109,9 @@ def train(agent, dataset, training_iterations, log_iter, rank=0, node_rank=0, if
         batch["lang_goal"] = raw_batch["lang_goal"]
         update_args = {
             "step": iteration,
+            "grad_accum_divisor": accum_divisor,
+            "reset_grad": accum_idx == 0,
+            "optimizer_step": optimizer_step,
         }
         update_args.update(
             {
@@ -222,9 +242,11 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
 
     # Things to change
     BATCH_SIZE_TRAIN = exp_cfg.bs
+    GRAD_ACCUM_STEPS = max(1, int(exp_cfg.grad_accum_steps))
     NUM_TRAIN = exp_cfg.demo
     # to match peract, iterations per epoch
     TRAINING_ITERATIONS = int(exp_cfg.train_iter // (exp_cfg.bs * world_size))
+    OPTIMIZER_UPDATES_PER_EPOCH = math.ceil(TRAINING_ITERATIONS / GRAD_ACCUM_STEPS)
     EPOCHS = exp_cfg.epochs
     TRAIN_REPLAY_STORAGE_DIR = "replay_temporal/replay_train"
     TRAIN_REPLAY_STORAGE_DIR_MEM = "replay_temporal_memory/replay_train"
@@ -234,6 +256,16 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
 
     if rank == 0:
         print("Training on {} tasks: {}".format(len(tasks), tasks))
+        print(
+            "Gradient accumulation: "
+            f"{GRAD_ACCUM_STEPS} micro-batches/update | "
+            f"global batch/update = {exp_cfg.bs * world_size * GRAD_ACCUM_STEPS}"
+        )
+        print(
+            "Optimizer updates: "
+            f"{OPTIMIZER_UPDATES_PER_EPOCH} per epoch | "
+            f"{OPTIMIZER_UPDATES_PER_EPOCH * EPOCHS} total"
+        )
 
     # if exp_cfg.agent == "our":
     mvt_cfg = mvt_cfg_mod.get_cfg_defaults()
@@ -299,7 +331,7 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
             scene_bounds=SCENE_BOUNDS,
             cameras=CAMERAS,
             log_dir=f"{log_dir}/test_run/",
-            cos_dec_max_step=EPOCHS * TRAINING_ITERATIONS,
+            cos_dec_max_step=EPOCHS * OPTIMIZER_UPDATES_PER_EPOCH,
             **exp_cfg.peract,
             **exp_cfg.rvt,
         )
@@ -363,7 +395,16 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
         if rank == 0:
             print(f"Rank [{rank}], Epoch [{i}]: Training on train dataset")
 
-        out = train(agent, train_dataset, TRAINING_ITERATIONS, log_iter, rank, node_rank, ifwandb=exp_cfg.wandb)
+        out = train(
+            agent,
+            train_dataset,
+            TRAINING_ITERATIONS,
+            log_iter,
+            grad_accum_steps=GRAD_ACCUM_STEPS,
+            rank=rank,
+            node_rank=node_rank,
+            ifwandb=exp_cfg.wandb,
+        )
 
         # if rank == 0:
         #     tb.update("train", i, out)
