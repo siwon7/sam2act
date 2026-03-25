@@ -420,6 +420,7 @@ class SAM2Act_Agent:
                     lr=self._lr,
                     weight_decay=self._lambda_weight_l2,
                     betas=(0.9, 0.999),
+                    optim_bits=8,
                 )
             else:
                 # From: https://github.com/cybertronai/pytorch-lamb/blob/master/pytorch_lamb/lamb.py
