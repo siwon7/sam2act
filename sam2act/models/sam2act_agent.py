@@ -4,6 +4,7 @@
 
 import pprint
 from contextlib import nullcontext
+from copy import deepcopy
 
 import clip
 import torch
@@ -27,6 +28,129 @@ from peract_colab.arm.optim.lamb import Lamb
 from yarr.agents.agent import ActResult
 from sam2act.utils.dataset import _clip_encode_text
 from sam2act.utils.lr_sched_utils import GradualWarmupScheduler
+
+
+class HybridLamb8bit(torch.optim.Optimizer):
+    """Route large tensors to bitsandbytes 8-bit LAMB and keep small tensors on PyTorch LAMB.
+
+    bitsandbytes 0.43.x falls back to a 32-bit update kernel for tensors smaller
+    than 4096 elements. That build does not expose a 32-bit LAMB kernel in this
+    environment, so we split parameters explicitly and never send small tensors
+    through the bitsandbytes path.
+    """
+
+    def __init__(
+        self,
+        params,
+        lr=1e-3,
+        betas=(0.9, 0.999),
+        eps=1e-8,
+        weight_decay=0.0,
+        min_8bit_size=4096,
+    ):
+        params = list(params)
+        defaults = dict(
+            lr=lr,
+            betas=betas,
+            eps=eps,
+            weight_decay=weight_decay,
+        )
+        super().__init__(params, defaults)
+
+        self.min_8bit_size = min_8bit_size
+        small_params = [p for p in params if p.numel() < self.min_8bit_size]
+        large_params = [p for p in params if p.numel() >= self.min_8bit_size]
+
+        self._small_optimizer = (
+            Lamb(
+                small_params,
+                lr=lr,
+                weight_decay=weight_decay,
+                betas=betas,
+                adam=False,
+            )
+            if small_params
+            else None
+        )
+        self._large_optimizer = (
+            bnb.optim.LAMB8bit(
+                large_params,
+                lr=lr,
+                weight_decay=weight_decay,
+                betas=betas,
+                eps=eps,
+                min_8bit_size=min_8bit_size,
+            )
+            if large_params
+            else None
+        )
+
+    def _sync_hparams(self):
+        group = self.param_groups[0]
+        for optimizer in (self._small_optimizer, self._large_optimizer):
+            if optimizer is None:
+                continue
+            for opt_group in optimizer.param_groups:
+                opt_group["lr"] = group["lr"]
+                opt_group["betas"] = group["betas"]
+                opt_group["eps"] = group["eps"]
+                opt_group["weight_decay"] = group["weight_decay"]
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        self._sync_hparams()
+        loss = None
+        if self._small_optimizer is not None:
+            loss = self._small_optimizer.step(closure)
+            closure = None
+        if self._large_optimizer is not None:
+            large_loss = self._large_optimizer.step(closure)
+            if loss is None:
+                loss = large_loss
+        return loss
+
+    def zero_grad(self, set_to_none=False):
+        for optimizer in (self._small_optimizer, self._large_optimizer):
+            if optimizer is not None:
+                optimizer.zero_grad(set_to_none=set_to_none)
+
+    def state_dict(self):
+        return {
+            "param_groups": deepcopy(self.param_groups),
+            "min_8bit_size": self.min_8bit_size,
+            "small_optimizer_state": (
+                self._small_optimizer.state_dict()
+                if self._small_optimizer is not None
+                else None
+            ),
+            "large_optimizer_state": (
+                self._large_optimizer.state_dict()
+                if self._large_optimizer is not None
+                else None
+            ),
+        }
+
+    def load_state_dict(self, state_dict):
+        saved_groups = state_dict.get("param_groups", [])
+        if saved_groups:
+            saved_group = saved_groups[0]
+            for key, value in saved_group.items():
+                if key != "params":
+                    self.param_groups[0][key] = value
+
+        self.min_8bit_size = state_dict.get("min_8bit_size", self.min_8bit_size)
+
+        if self._small_optimizer is not None:
+            small_state = state_dict.get("small_optimizer_state")
+            if small_state is not None:
+                self._small_optimizer.load_state_dict(small_state)
+
+        if self._large_optimizer is not None:
+            large_state = state_dict.get("large_optimizer_state")
+            if large_state is not None:
+                self._large_optimizer.load_state_dict(large_state)
+
+        self._sync_hparams()
 
 
 def eval_con(gt, pred):
@@ -413,15 +537,14 @@ class SAM2Act_Agent:
 
         if self._optimizer_type == "lamb":
             if self.bnb:
-                print("Using 8-Bit Optimizer")
-                self._optimizer = bnb.optim.LAMB(
+                print("Using hybrid 8-Bit LAMB optimizer")
+                self._optimizer = HybridLamb8bit(
                     self._network.parameters(),
-                    # param_groups,
                     lr=self._lr,
                     weight_decay=self._lambda_weight_l2,
                     betas=(0.9, 0.999),
-                    optim_bits=8,
-                    min_8bit_size=0,
+                    eps=1e-8,
+                    min_8bit_size=4096,
                 )
             else:
                 # From: https://github.com/cybertronai/pytorch-lamb/blob/master/pytorch_lamb/lamb.py
