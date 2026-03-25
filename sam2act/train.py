@@ -230,7 +230,8 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
     old_exp_cfg_peract_lr = exp_cfg.peract.lr
     old_exp_cfg_exp_id = exp_cfg.exp_id
 
-    exp_cfg.peract.lr *= world_size * exp_cfg.bs
+    grad_accum_scale = max(1, int(getattr(exp_cfg, "grad_accum_steps", 1)))
+    exp_cfg.peract.lr *= world_size * exp_cfg.bs * grad_accum_scale
     # if cmd_args.exp_cfg_opts != "":
     #     exp_cfg.exp_id += f"_{short_name(cmd_args.exp_cfg_opts)}"
     # if cmd_args.mvt_cfg_opts != "":
