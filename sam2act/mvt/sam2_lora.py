@@ -29,13 +29,14 @@ class _LoRA_qkv(nn.Module):
             linear_b_v: nn.Module,
     ):
         super().__init__()
+        device = qkv.weight.device
         self.qkv = qkv
-        self.linear_a_q = linear_a_q.cuda()
-        self.linear_b_q = linear_b_q.cuda()
-        self.linear_a_v = linear_a_v.cuda()
-        self.linear_b_v = linear_b_v.cuda()
+        self.linear_a_q = linear_a_q.to(device)
+        self.linear_b_q = linear_b_q.to(device)
+        self.linear_a_v = linear_a_v.to(device)
+        self.linear_b_v = linear_b_v.to(device)
         self.dim = qkv.in_features
-        self.w_identity = torch.eye(qkv.in_features).cuda()
+        self.w_identity = torch.eye(qkv.in_features, device=device)
 
     def forward(self, x):
         qkv = self.qkv(x)  # B,N,N,3*org_C
@@ -65,11 +66,12 @@ class _LoRA_q_proj(nn.Module):
         linear_b_q: nn.Module,
     ):
         super().__init__()
+        device = q_proj.weight.device
         self.q_proj = q_proj
-        self.linear_a_q = linear_a_q.cuda()
-        self.linear_b_q = linear_b_q.cuda()
+        self.linear_a_q = linear_a_q.to(device)
+        self.linear_b_q = linear_b_q.to(device)
         self.dim = q_proj.in_features
-        self.w_identity = torch.eye(q_proj.in_features).cuda()
+        self.w_identity = torch.eye(q_proj.in_features, device=device)
 
     def forward(self, x):
         q_proj = self.q_proj(x)  # B,C,H*W
@@ -96,11 +98,12 @@ class _LoRA_k_proj(nn.Module):
         linear_b_k: nn.Module,
     ):
         super().__init__()
+        device = k_proj.weight.device
         self.k_proj = k_proj
-        self.linear_a_k = linear_a_k.cuda()
-        self.linear_b_k = linear_b_k.cuda()
+        self.linear_a_k = linear_a_k.to(device)
+        self.linear_b_k = linear_b_k.to(device)
         self.dim = k_proj.in_features
-        self.w_identity = torch.eye(k_proj.in_features).cuda()
+        self.w_identity = torch.eye(k_proj.in_features, device=device)
 
     def forward(self, x):
         k_proj = self.k_proj(x)  # B,C,H*W
@@ -127,11 +130,12 @@ class _LoRA_v_proj(nn.Module):
         linear_b_v: nn.Module,
     ):
         super().__init__()
+        device = v_proj.weight.device
         self.v_proj = v_proj
-        self.linear_a_v = linear_a_v.cuda()
-        self.linear_b_v = linear_b_v.cuda()
+        self.linear_a_v = linear_a_v.to(device)
+        self.linear_b_v = linear_b_v.to(device)
         self.dim = v_proj.in_features
-        self.w_identity = torch.eye(v_proj.in_features).cuda()
+        self.w_identity = torch.eye(v_proj.in_features, device=device)
 
     def forward(self, x):
         v_proj = self.v_proj(x)  # B,C,H*W
@@ -575,4 +579,3 @@ if __name__ == "__main__":
     output = lora_sam2.sam2.image_encoder(torch.rand(size=(1, 3, 320, 320)).cuda())
     print(output.keys())
     print(output['vision_features'].shape)
-

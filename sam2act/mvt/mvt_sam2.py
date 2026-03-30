@@ -172,7 +172,7 @@ class MVT_SAM2(nn.Module):
 
         if self.ifSAM2:
             # sam2 = build_sam2_custom(self.sam2_config, self.sam2_ckpt, device="cuda", image_size=self.img_size if not self.resize_rgb else 256) #, num_maskmem=self.num_maskmem)
-            sam2 = build_sam2_custom_select(self.sam2_config, self.sam2_ckpt, device="cuda", include_keys=['image_encoder'], 
+            sam2 = build_sam2_custom_select(self.sam2_config, self.sam2_ckpt, device=renderer_device, include_keys=['image_encoder'], 
                                             image_size=self.img_size if not self.resize_rgb else 256, 
                                             num_maskmem=self.num_maskmem,
                                             memory_in_dim=128)

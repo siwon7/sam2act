@@ -458,8 +458,9 @@ class SAM2Act_Agent:
     def unload_clip(self):
         del self.clip_model
         del self.clip_preprocess
-        with torch.cuda.device(self._device):
-            torch.cuda.empty_cache()
+        if str(self._device).startswith("cuda"):
+            with torch.cuda.device(self._device):
+                torch.cuda.empty_cache()
 
     # copied from per-act and removed the translation part
     def _get_one_hot_expert_actions(

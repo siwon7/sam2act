@@ -1,4 +1,5 @@
 from multiprocessing import Lock
+from threading import Lock as ThreadLock
 from typing import List
 
 import numpy as np
@@ -66,7 +67,10 @@ class _SimpleAccumulator(StatAccumulator):
         self._prefix = prefix
         self._eval_video_fps = eval_video_fps
         self._mean_only = mean_only
-        self._lock = Lock()
+        try:
+            self._lock = Lock()
+        except PermissionError:
+            self._lock = ThreadLock()
         self._episode_returns = Metric()
         self._episode_lengths = Metric()
         self._summaries = []

@@ -540,9 +540,9 @@ class MVT_SAM2_Single(nn.Module):
             
             '''image embeddings''' 
 
-            vision_feats = [self.vision_feats_all[-1][:,idx*num_views+view_idx,:].unsqueeze(1).clone().cuda()]
-            
-            vision_pos_embeds= [self.vision_pos_embeds_all[-1][:,idx*num_views+view_idx,:].unsqueeze(1).clone().cuda()]
+            vision_feats = [self.vision_feats_all[-1][:,idx*num_views+view_idx,:].unsqueeze(1).clone().to(GPUdevice)]
+
+            vision_pos_embeds= [self.vision_pos_embeds_all[-1][:,idx*num_views+view_idx,:].unsqueeze(1).clone().to(GPUdevice)]
 
             '''retrieve memory from memory bank'''
 
@@ -562,10 +562,10 @@ class MVT_SAM2_Single(nn.Module):
                 for t_pos, prev in t_pos_and_prevs:
                     # "maskmem_features" might have been offloaded to CPU in demo use cases,
                     # so we load it back to GPU (it's a no-op if it's already on GPU).
-                    feats = prev[0].cuda()
+                    feats = prev[0].to(GPUdevice)
                     to_cat_memory.append(feats)
                     # Spatial positional encoding (it might have been offloaded to CPU in eval)
-                    maskmem_enc = prev[1].cuda()
+                    maskmem_enc = prev[1].to(GPUdevice)
                     # Temporal positional encoding
                     # the smaller the index, the closer in time
                     maskmem_enc = (
@@ -588,7 +588,7 @@ class MVT_SAM2_Single(nn.Module):
                 )
 
             else:
-                pix_feat_with_mem = vision_feats[-1] + torch.nn.Parameter(torch.zeros(1, 1, 128)).to(device="cuda")
+                pix_feat_with_mem = vision_feats[-1] + torch.nn.Parameter(torch.zeros(1, 1, 128)).to(device=GPUdevice)
 
             image_embed_with_mem = pix_feat_with_mem.to(torch.float32).permute(1, 2, 0).view(1, -1, *feat_sizes[-1])
 
@@ -609,15 +609,15 @@ class MVT_SAM2_Single(nn.Module):
                 
             '''image encoder''' 
 
-            vision_feats = [self.vision_feats_all[-1][:,idx*num_views+view_idx,:].unsqueeze(1).clone().cuda()]
-            
-            vision_pos_embeds= [self.vision_pos_embeds_all[-1][:,idx*num_views+view_idx,:].unsqueeze(1).clone().cuda()]
+            vision_feats = [self.vision_feats_all[-1][:,idx*num_views+view_idx,:].unsqueeze(1).clone().to(GPUdevice)]
+
+            vision_pos_embeds= [self.vision_pos_embeds_all[-1][:,idx*num_views+view_idx,:].unsqueeze(1).clone().to(GPUdevice)]
             
             hm_frame = hm[0, view_idx, :, :, :, :]
             
             '''encode memory'''
             high_res_multimasks = torch.nn.functional.interpolate(
-                hm_frame.cuda(),
+                hm_frame.to(GPUdevice),
                 size=(net.image_size, net.image_size),
                 mode="bilinear",
                 align_corners=False,
@@ -846,7 +846,9 @@ class MVT_SAM2_Single(nn.Module):
                     upscaled_embedding = act2(ln2(conv2(upscaled_embedding) + feat_s0)) # [bs, 32, 64, 64]
                     trans = conv3(up(upscaled_embedding))
 
-                trans = trans.view(bs, self.num_img, 1, h, w).half()
+                trans = trans.view(bs, self.num_img, 1, h, w)
+                if trans.device.type != "cpu":
+                    trans = trans.half()
             else:
                 u0 = self.up0(x)
                 if self.inp_pre_con:
@@ -897,7 +899,9 @@ class MVT_SAM2_Single(nn.Module):
                                 upscaled_embedding = act2(ln2(conv2(upscaled_embedding) + feat_s0)) # [bs, 32, 64, 64]
                                 trans = conv3(up(upscaled_embedding))
 
-                            trans = trans.view(bs, self.num_img, 1, h, w).half()
+                            trans = trans.view(bs, self.num_img, 1, h, w)
+                            if trans.device.type != "cpu":
+                                trans = trans.half()
                         else:
                             u0 = self.up0(x_i)
                             if self.inp_pre_con:
@@ -942,7 +946,9 @@ class MVT_SAM2_Single(nn.Module):
                         trans = conv3(up(upscaled_embedding))
 
                         # trans = self.up0(x)
-                    trans = trans.view(bs, self.num_img, 1, h, w).half()
+                    trans = trans.view(bs, self.num_img, 1, h, w)
+                    if trans.device.type != "cpu":
+                        trans = trans.half()
                 else:
                     u0 = self.up0(x)
                     if self.inp_pre_con:

@@ -13,7 +13,6 @@ import numpy as np
 
 from omegaconf import OmegaConf
 from multiprocessing import Value
-from tensorflow.python.summary.summary_iterator import summary_iterator
 from copy import deepcopy
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -25,7 +24,6 @@ from rlbench.action_modes.gripper_action_modes import Discrete
 from rlbench.action_modes.action_mode import MoveArmThenGripper
 from yarr.utils.rollout_generator import RolloutGenerator
 from yarr.utils.stat_accumulator import SimpleAccumulator
-from yarr.utils.log_writer import LogWriter
 from yarr.agents.agent import VideoSummary
 
 import sam2act.mvt.config as default_mvt_cfg
@@ -86,7 +84,10 @@ def load_agent(
     device=0,
     use_input_place_with_mean=False,
 ):
-    device = f"cuda:{device}"
+    if isinstance(device, str):
+        resolved_device = device
+    else:
+        resolved_device = f"cuda:{device}" if torch.cuda.is_available() else "cpu"
 
     if not (peract_official):
         assert model_path is not None
@@ -179,15 +180,15 @@ def load_agent(
                 exp_cfg.freeze()
 
             sam2act = mvt_sam2.MVT_SAM2(
-                renderer_device=device,
-                rank=0,
+                renderer_device=resolved_device,
+                rank=resolved_device,
                 **mvt_cfg,
             )
 
             get_model_size(sam2act)
 
             agent = sam2act_agent.SAM2Act_Agent(
-                network=sam2act.to(device),
+                network=sam2act.to(resolved_device),
                 image_resolution=[IMAGE_SIZE, IMAGE_SIZE],
                 add_lang=mvt_cfg.add_lang,
                 stage_two=mvt_cfg.stage_two,
@@ -201,7 +202,7 @@ def load_agent(
         else:
             raise NotImplementedError
 
-        agent.build(training=False, device=device)
+        agent.build(training=False, device=resolved_device)
         load_agent_state(model_path, agent)
         agent.eval()
 
@@ -281,7 +282,10 @@ def eval(
 
     eval_env.eval = True
 
-    device = f"cuda:{device}"
+    if isinstance(device, str):
+        device = device
+    else:
+        device = f"cuda:{device}" if torch.cuda.is_available() else "cpu"
 
     if logging:
         assert log_dir is not None
@@ -304,7 +308,14 @@ def eval(
     current_task_id = -1
 
     num_tasks = len(tasks)
-    step_signal = Value("i", -1)
+    try:
+        step_signal = Value("i", -1)
+    except PermissionError:
+        class _StepSignal:
+            def __init__(self, value):
+                self.value = value
+
+        step_signal = _StepSignal(-1)
 
     scores = []
     for task_id in range(num_tasks):
@@ -373,12 +384,21 @@ def eval(
                 if "eval" in s.name:
                     s.name = "%s/%s" % (s.name, task_name)
 
+        task_score = None
         if len(summaries) > 0:
-            task_score = [
+            matched_scores = [
                 s.value for s in summaries if f"eval_envs/return/{task_name}" in s.name
-            ][0]
-        else:
-            task_score = "unknown"
+            ]
+            if len(matched_scores) > 0:
+                task_score = matched_scores[0]
+
+        # Fall back to rollout rewards when the summary writer does not emit
+        # an eval_envs/return scalar for the task.
+        if task_score is None and len(task_rewards) > 0:
+            task_score = float(np.mean(task_rewards))
+
+        if task_score is None:
+            task_score = float("nan")
 
         print(f"[Evaluation] Finished {task_name} | Final Score: {task_score}\n")
 
@@ -434,7 +454,10 @@ def eval(
             fieldnames = ["task", "success rate", "length", "total_transitions"]
             csv_writer = csv.DictWriter(csv_fp, fieldnames=fieldnames)
             csv_results = {"task": "average"}
-            csv_results["success rate"] = sum(scores) / len(scores)
+            valid_scores = [score for score in scores if not np.isnan(score)]
+            csv_results["success rate"] = (
+                sum(valid_scores) / len(valid_scores) if len(valid_scores) > 0 else float("nan")
+            )
             csv_writer.writerow(csv_results)
 
     eval_env.shutdown()
@@ -479,6 +502,7 @@ def _eval(args):
 
     # skipping evaluated models
     if args.skip:
+        from tensorflow.python.summary.summary_iterator import summary_iterator
         """
         to_skip: {
             0: {'light_bulb_in': False, .....}
