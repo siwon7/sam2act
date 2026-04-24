@@ -93,6 +93,7 @@ class MVT_SAM2(nn.Module):
         sam2_ckpt,
         use_memory,
         num_maskmem,
+        graph_node_classes,
         renderer_device="cuda:0",
     ):
         """MultiView Transfomer
@@ -169,6 +170,7 @@ class MVT_SAM2(nn.Module):
         self.sam2_ckpt = sam2_ckpt
         self.use_memory = use_memory
         self.num_maskmem = num_maskmem
+        self.graph_node_classes = graph_node_classes
 
         if self.ifSAM2:
             # sam2 = build_sam2_custom(self.sam2_config, self.sam2_ckpt, device="cuda", image_size=self.img_size if not self.resize_rgb else 256) #, num_maskmem=self.num_maskmem)

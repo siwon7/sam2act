@@ -99,6 +99,7 @@ class MVT_SAM2_Single(nn.Module):
         sam2_ckpt,
         use_memory,
         num_maskmem,
+        graph_node_classes,
         renderer_device="cuda:0",
         renderer=None,
         no_feat=False,
@@ -201,6 +202,7 @@ class MVT_SAM2_Single(nn.Module):
         self.rank = rank
         self.use_memory = use_memory
         self.num_maskmem = num_maskmem
+        self.graph_node_classes = graph_node_classes
 
         self.curr_obs_idx = 0
 
@@ -502,6 +504,13 @@ class MVT_SAM2_Single(nn.Module):
 
             else:
                 assert False
+
+            if self.graph_node_classes > 0:
+                self.graph_node_head = get_feat_fc(
+                    self.num_img * feat_fc_dim,
+                    self.graph_node_classes,
+                )
+                self.graph_node_head.apply(initialize_weights)
 
         if self.use_point_renderer:
             from point_renderer.rvt_ops import select_feat_from_hm
@@ -1044,6 +1053,10 @@ class MVT_SAM2_Single(nn.Module):
                 feat_norm = (feat - feat.mean()) / feat.std()
                 feat = self.feat_fc(feat_norm)
                 out = {"feat": feat}
+                if self.graph_node_classes > 0:
+                    out["graph_node_logits"] = self.graph_node_head(
+                        feat_norm
+                    ).unsqueeze(1)
             elif self.rot_ver == 1:
                 feat = feat.squeeze(1)
                 # features except rotation
@@ -1074,6 +1087,10 @@ class MVT_SAM2_Single(nn.Module):
                     "feat_y": feat_y.unsqueeze(1),
                     "feat_z": feat_z.unsqueeze(1),
                 }
+                if self.graph_node_classes > 0:
+                    out["graph_node_logits"] = self.graph_node_head(
+                        feat
+                    ).unsqueeze(1)
         else:
             out = {}
 

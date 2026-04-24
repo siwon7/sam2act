@@ -326,6 +326,7 @@ class SAM2Act_Agent:
         same_trans_aug_per_seq: bool = False,
         use_memory: bool = False,
         num_maskmem: int = 7,
+        graph_node_loss_weight: float = 0.0,
     ):
         """
         :param gt_hm_sigma: the std of the groundtruth hm, currently for for
@@ -389,6 +390,7 @@ class SAM2Act_Agent:
 
         self.use_memory = use_memory
         self._num_maskmem = num_maskmem
+        self.graph_node_loss_weight = graph_node_loss_weight
 
     def build(self, training: bool, device: torch.device = None):
         self._training = training
@@ -576,7 +578,28 @@ class SAM2Act_Agent:
             return q_trans, rot_q, grip_q, collision_q, y_q, pts
         
         else:
-            return q_trans, None, None, None, None, None
+            pred_out = out["mvt2"] if self.stage_two and "mvt2" in out else out
+            if self.rot_ver == 0 and "feat" in pred_out:
+                rot_q = pred_out["feat"].view(bs, -1)[:, 0 : self.num_all_rot]
+                grip_q = pred_out["feat"].view(bs, -1)[:, self.num_all_rot : self.num_all_rot + 2]
+                collision_q = pred_out["feat"].view(bs, -1)[
+                    :, self.num_all_rot + 2 : self.num_all_rot + 4
+                ]
+            elif self.rot_ver == 1 and all(
+                key in pred_out for key in ("feat_x", "feat_y", "feat_z", "feat_ex_rot")
+            ):
+                rot_q = torch.cat((pred_out["feat_x"], pred_out["feat_y"], pred_out["feat_z"]),
+                                dim=-1).view(bs, -1)
+                grip_q = pred_out["feat_ex_rot"].view(bs, -1)[:, :2]
+                collision_q = pred_out["feat_ex_rot"].view(bs, -1)[:, 2:]
+            else:
+                rot_q = None
+                grip_q = None
+                collision_q = None
+
+            y_q = None
+
+            return q_trans, rot_q, grip_q, collision_q, y_q, pts
 
     def update(
         self,
@@ -760,6 +783,31 @@ class SAM2Act_Agent:
                 wpt_local, pts, out, dyn_cam_info, dims=(bs, nc, h, w)
             )
 
+            pred_out = out["mvt2"] if self.stage_two and "mvt2" in out else out
+            graph_node_loss = torch.tensor(0.0, device=self._device)
+            graph_node_acc = None
+            if (
+                self.graph_node_loss_weight > 0.0
+                and "graph_node_logits" in pred_out
+                and "keypoint_idx" in replay_sample
+            ):
+                graph_node_logits = pred_out["graph_node_logits"].view(bs, -1)
+                graph_node_target = replay_sample["keypoint_idx"][:, -1].long().to(
+                    graph_node_logits.device
+                )
+                valid_mask = (graph_node_target >= 0) & (
+                    graph_node_target < graph_node_logits.shape[-1]
+                )
+                if valid_mask.any():
+                    graph_node_loss = self._cross_entropy_loss(
+                        graph_node_logits[valid_mask],
+                        graph_node_target[valid_mask],
+                    ).mean()
+                    graph_node_acc = (
+                        graph_node_logits[valid_mask].argmax(dim=-1)
+                        == graph_node_target[valid_mask]
+                    ).float().mean()
+
         loss_log = {}
         if backprop:
             with autocast(enabled=self.amp):
@@ -814,7 +862,9 @@ class SAM2Act_Agent:
 
                 else:
 
-                    total_loss = trans_loss
+                    total_loss = trans_loss + (
+                        self.graph_node_loss_weight * graph_node_loss
+                    )
 
 
             self._optimizer.zero_grad(set_to_none=True)
@@ -835,6 +885,12 @@ class SAM2Act_Agent:
                 "rot_loss_z": rot_loss_z.item() if not self.use_memory else None,
                 "grip_loss": grip_loss.item() if not self.use_memory else None,
                 "collision_loss": collision_loss.item() if not self.use_memory else None,
+                "graph_node_loss": graph_node_loss.item()
+                if self.graph_node_loss_weight > 0.0
+                else None,
+                "graph_node_acc": graph_node_acc.item()
+                if graph_node_acc is not None
+                else None,
                 "lr": self._optimizer.param_groups[0]["lr"],
             }
             manage_loss_log(self, loss_log, reset_log=reset_log)
@@ -974,6 +1030,25 @@ class SAM2Act_Agent:
             mvt1_or_mvt2 = False
         else:
             mvt1_or_mvt2 = True
+
+        if rot_q is None or grip_q is None or collision_q is None:
+            q_out = out["mvt2"] if (self.stage_two and not self.use_memory) else out
+            if self.rot_ver == 0:
+                rot_q = q_out["feat"].view(q_out["feat"].shape[0], -1)[:, 0 : self.num_all_rot]
+                grip_q = q_out["feat"].view(q_out["feat"].shape[0], -1)[
+                    :, self.num_all_rot : self.num_all_rot + 2
+                ]
+                collision_q = q_out["feat"].view(q_out["feat"].shape[0], -1)[
+                    :, self.num_all_rot + 2 : self.num_all_rot + 4
+                ]
+            elif self.rot_ver == 1:
+                rot_q = torch.cat(
+                    (q_out["feat_x"], q_out["feat_y"], q_out["feat_z"]), dim=-1
+                ).view(q_out["feat_x"].shape[0], -1)
+                grip_q = q_out["feat_ex_rot"].view(q_out["feat_ex_rot"].shape[0], -1)[:, :2]
+                collision_q = q_out["feat_ex_rot"].view(q_out["feat_ex_rot"].shape[0], -1)[:, 2:]
+            else:
+                assert False
 
         pred_wpt_local = self._net_mod.get_wpt(
             out, mvt1_or_mvt2, dyn_cam_info, y_q

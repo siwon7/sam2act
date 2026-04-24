@@ -54,6 +54,7 @@ _C.ifsep = False
 _C.resize_rgb = True
 _C.use_memory = False
 _C.num_maskmem = 7
+_C.graph_node_classes = 0
 
 _C.sam2_config = '/configs/sam2.1/sam2.1_hiera_b+'
 _C.sam2_ckpt = './mvt/sam2_train/checkpoints/sam2.1_hiera_base_plus.pt'
