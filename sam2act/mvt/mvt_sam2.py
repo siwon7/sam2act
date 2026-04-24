@@ -100,6 +100,9 @@ class MVT_SAM2(nn.Module):
         memory_gate_use_task=False,
         memory_gate_hidden_dim=128,
         memory_gate_task_cond_dim=0,
+        persistent_anchor_enabled=False,
+        persistent_anchor_max_steps=2,
+        persistent_anchor_prepend=True,
         renderer_device="cuda:0",
     ):
         """MultiView Transfomer
@@ -183,6 +186,9 @@ class MVT_SAM2(nn.Module):
         self.memory_gate_use_task = memory_gate_use_task
         self.memory_gate_hidden_dim = memory_gate_hidden_dim
         self.memory_gate_task_cond_dim = memory_gate_task_cond_dim
+        self.persistent_anchor_enabled = persistent_anchor_enabled
+        self.persistent_anchor_max_steps = persistent_anchor_max_steps
+        self.persistent_anchor_prepend = persistent_anchor_prepend
 
         if self.ifSAM2:
             # sam2 = build_sam2_custom(self.sam2_config, self.sam2_ckpt, device="cuda", image_size=self.img_size if not self.resize_rgb else 256) #, num_maskmem=self.num_maskmem)

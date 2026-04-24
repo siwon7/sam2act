@@ -106,6 +106,9 @@ class MVT_SAM2_Single(nn.Module):
         memory_gate_use_task=False,
         memory_gate_hidden_dim=128,
         memory_gate_task_cond_dim=0,
+        persistent_anchor_enabled=False,
+        persistent_anchor_max_steps=2,
+        persistent_anchor_prepend=True,
         renderer_device="cuda:0",
         renderer=None,
         no_feat=False,
@@ -215,11 +218,15 @@ class MVT_SAM2_Single(nn.Module):
         self.memory_gate_use_task = memory_gate_use_task
         self.memory_gate_hidden_dim = memory_gate_hidden_dim
         self.memory_gate_task_cond_dim = memory_gate_task_cond_dim
+        self.persistent_anchor_enabled = persistent_anchor_enabled
+        self.persistent_anchor_max_steps = persistent_anchor_max_steps
+        self.persistent_anchor_prepend = persistent_anchor_prepend
 
         self.curr_obs_idx = 0
         self.memory_gate_context = None
 
         self.memory_bank_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
+        self.anchor_memory_bank_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
 
 
         if self.cvx_up:
@@ -387,6 +394,13 @@ class MVT_SAM2_Single(nn.Module):
         else:
             self.memory_gate_text_proj = None
             self.memory_gate_task_proj = None
+
+        if self.persistent_anchor_enabled:
+            self.persistent_anchor_tpos_enc = nn.Parameter(
+                torch.zeros(1, 1, self.memory_gate_dim)
+            )
+        else:
+            self.register_parameter("persistent_anchor_tpos_enc", None)
 
         get_attn_attn = lambda: PreNorm(
             attn_dim,
@@ -574,7 +588,19 @@ class MVT_SAM2_Single(nn.Module):
     
     def reset_memory_bank(self):
         self.memory_bank_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
+        self.anchor_memory_bank_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
         self.curr_obs_idx = 0
+
+    def _get_anchor_memory_entries(self, view_idx, recent_keys):
+        if not self.persistent_anchor_enabled:
+            return []
+        anchor_bank = self.anchor_memory_bank_multiview[view_idx]
+        anchor_entries = []
+        for anchor_idx in sorted(anchor_bank.keys()):
+            if anchor_idx in recent_keys:
+                continue
+            anchor_entries.append((anchor_idx, anchor_bank[anchor_idx]))
+        return anchor_entries
 
     def _reset_memory_gate_context(self):
         self.memory_gate_context = None
@@ -634,13 +660,18 @@ class MVT_SAM2_Single(nn.Module):
 
             if len(memory_bank_list) > 0:
                 num_mem = min(len(memory_bank_list), net.num_maskmem)
+                recent_keys = set()
 
                 for t_pos in range(1, num_mem + 1):
                     # here t_pos is "how many act away from the current act"
-                    t_pos_and_prevs.append((t_pos, memory_bank_list.get(self.curr_obs_idx - t_pos))) 
+                    prev_idx = self.curr_obs_idx - t_pos
+                    recent_keys.add(prev_idx)
+                    t_pos_and_prevs.append((t_pos, memory_bank_list.get(prev_idx)))
 
                 to_cat_memory = []
                 to_cat_memory_pos_embed = []
+
+                anchor_entries = self._get_anchor_memory_entries(view_idx, recent_keys)
 
                 for t_pos, prev in t_pos_and_prevs:
                     # "maskmem_features" might have been offloaded to CPU in demo use cases,
@@ -655,6 +686,24 @@ class MVT_SAM2_Single(nn.Module):
                         maskmem_enc + net.maskmem_tpos_enc[t_pos - 1]
                     )
                     to_cat_memory_pos_embed.append(maskmem_enc)
+
+                anchor_memory = []
+                anchor_memory_pos = []
+                for _, anchor_prev in anchor_entries:
+                    feats = anchor_prev[0].cuda()
+                    anchor_memory.append(feats)
+                    anchor_enc = anchor_prev[1].cuda()
+                    if self.persistent_anchor_tpos_enc is not None:
+                        anchor_enc = anchor_enc + self.persistent_anchor_tpos_enc
+                    anchor_memory_pos.append(anchor_enc)
+
+                if anchor_memory:
+                    if self.persistent_anchor_prepend:
+                        to_cat_memory = anchor_memory + to_cat_memory
+                        to_cat_memory_pos_embed = anchor_memory_pos + to_cat_memory_pos_embed
+                    else:
+                        to_cat_memory.extend(anchor_memory)
+                        to_cat_memory_pos_embed.extend(anchor_memory_pos)
 
                 memory_fused = torch.cat(to_cat_memory, dim=0)
                 memory_pos_fused = torch.cat(to_cat_memory_pos_embed, dim=0)
@@ -733,6 +782,14 @@ class MVT_SAM2_Single(nn.Module):
             memory_bank_list = self.memory_bank_multiview[view_idx]
 
             memory_bank_list[self.curr_obs_idx] = [memory, memory_pos]
+            if (
+                self.persistent_anchor_enabled
+                and self.curr_obs_idx < self.persistent_anchor_max_steps
+            ):
+                self.anchor_memory_bank_multiview[view_idx][self.curr_obs_idx] = [
+                    memory,
+                    memory_pos,
+                ]
 
     def forward(
         self,

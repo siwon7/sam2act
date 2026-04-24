@@ -7,11 +7,12 @@ should come later, after the run surface and note structure stabilize.
 
 ## Immediate Goal
 
-Use a single 4-GPU stage2 launcher that can cover three experiment families:
+Use a single 4-GPU stage2 launcher that can cover four experiment families:
 
 1. **Baseline multitask MemoryBench stage2**
 2. **`mem11` window extension where it helps**
-3. **Future coarse phase aux loss and text/task memory gate experiments**
+3. **Coarse phase aux loss and text/task memory gate experiments**
+4. **Persistent anchor memory experiments**
 
 The launcher should stay usable even before exact final config flag names are
 implemented.
@@ -52,7 +53,7 @@ Expected future semantics:
 - phase auxiliary loss improves phase disambiguation without hardcoding exact
   keypoint graphs per task
 
-### Exp 4: text/task memory gate placeholder
+### Exp 4: text/task memory gate
 
 - same as Exp 3
 - set `ENABLE_TEXT_TASK_GATE=1`
@@ -64,12 +65,31 @@ Expected future semantics:
 - task/language-conditioned routing over memory candidates
 - supports persistent task anchors without overfitting to a single task
 
+### Exp 5: persistent anchor memory
+
+- same as Exp 4
+- set `ENABLE_PERSISTENT_ANCHOR=1`
+- default opts:
+  - `persistent_anchor_enabled True`
+  - `persistent_anchor_max_steps 2`
+
+Expected semantics:
+- preserve early task-critical states in a dedicated anchor bank
+- allow late return phases to access initial evidence even when recent-window
+  attention is biased toward an intermediate anchor such as the button phase
+- stay generic across tasks by defaulting to the first `k` key steps rather
+  than hardcoding task-specific node ids inside the launcher
+
 ## Practical Notes
 
 - `put_block_back` benefits from `mem11`; `reopen_drawer` and
   `rearrange_block` may not need the same value.
 - This scaffold therefore treats `mem11` as a launcher convenience, not as a
   final multitask design decision.
+- Persistent anchors are intentionally separated from the FIFO window. This
+  follows the observation that `put_block_back` often over-attends to the
+  `move_over_button` phase even when teacher-forced memory exposes the initial
+  slot in the bank.
 - Future exact flag names should be added in core code, while the launcher
   remains stable by forwarding them through `EXTRA_*` and `*_OPTS` variables.
 
@@ -78,3 +98,4 @@ Expected future semantics:
 - run starts cleanly from a stage1 checkpoint without editing core code
 - resulting command line is easy to inspect from the log
 - new phase/gate flags can be turned on by environment variables alone
+- persistent anchor memory can be enabled without changing the launcher

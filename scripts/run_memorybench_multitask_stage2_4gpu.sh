@@ -24,10 +24,12 @@ set -euo pipefail
 #   ENABLE_MEM11=1
 #   ENABLE_COARSE_PHASE_AUX=1
 #   ENABLE_TEXT_TASK_GATE=1
+#   ENABLE_PERSISTENT_ANCHOR=1
 #   COARSE_PHASE_EXP_CFG_OPTS="peract.phase_aux_loss_weight 0.5"
 #   COARSE_PHASE_MVT_CFG_OPTS="coarse_phase_classes 4"
 #   TEXT_TASK_GATE_EXP_CFG_OPTS="peract.task_gate_loss_weight 0.2"
 #   TEXT_TASK_GATE_MVT_CFG_OPTS="task_gate_mode text"
+#   PERSISTENT_ANCHOR_MVT_CFG_OPTS="persistent_anchor_enabled True persistent_anchor_max_steps 2"
 #   EXTRA_EXP_CFG_OPTS="..."
 #   EXTRA_MVT_CFG_OPTS="..."
 #   EXTRA_TRAIN_ARGS="..."
@@ -54,10 +56,12 @@ CUDA_DEVICES="${CUDA_DEVICES:-0,1,2,3}"
 ENABLE_MEM11="${ENABLE_MEM11:-0}"
 ENABLE_COARSE_PHASE_AUX="${ENABLE_COARSE_PHASE_AUX:-0}"
 ENABLE_TEXT_TASK_GATE="${ENABLE_TEXT_TASK_GATE:-0}"
+ENABLE_PERSISTENT_ANCHOR="${ENABLE_PERSISTENT_ANCHOR:-0}"
 COARSE_PHASE_EXP_CFG_OPTS="${COARSE_PHASE_EXP_CFG_OPTS:-}"
 COARSE_PHASE_MVT_CFG_OPTS="${COARSE_PHASE_MVT_CFG_OPTS:-}"
 TEXT_TASK_GATE_EXP_CFG_OPTS="${TEXT_TASK_GATE_EXP_CFG_OPTS:-}"
 TEXT_TASK_GATE_MVT_CFG_OPTS="${TEXT_TASK_GATE_MVT_CFG_OPTS:-}"
+PERSISTENT_ANCHOR_MVT_CFG_OPTS="${PERSISTENT_ANCHOR_MVT_CFG_OPTS:-persistent_anchor_enabled True persistent_anchor_max_steps 2}"
 EXTRA_EXP_CFG_OPTS="${EXTRA_EXP_CFG_OPTS:-}"
 EXTRA_MVT_CFG_OPTS="${EXTRA_MVT_CFG_OPTS:-}"
 EXTRA_TRAIN_ARGS="${EXTRA_TRAIN_ARGS:-}"
@@ -118,6 +122,10 @@ if [[ "$ENABLE_TEXT_TASK_GATE" == "1" ]]; then
   MVT_CFG_OPTS="$(append_opts "$MVT_CFG_OPTS" "$TEXT_TASK_GATE_MVT_CFG_OPTS")"
 fi
 
+if [[ "$ENABLE_PERSISTENT_ANCHOR" == "1" ]]; then
+  MVT_CFG_OPTS="$(append_opts "$MVT_CFG_OPTS" "$PERSISTENT_ANCHOR_MVT_CFG_OPTS")"
+fi
+
 EXP_CFG_OPTS="$(append_opts "$EXP_CFG_OPTS" "$EXTRA_EXP_CFG_OPTS")"
 MVT_CFG_OPTS="$(append_opts "$MVT_CFG_OPTS" "$EXTRA_MVT_CFG_OPTS")"
 
@@ -144,6 +152,7 @@ cd "$CODE_ROOT"
   echo "exp_name=$EXP_NAME"
   echo "bs=$BS lr=$LR epochs=$EPOCHS num_maskmem=$NUM_MASKMEM"
   echo "enable_mem11=$ENABLE_MEM11 enable_coarse_phase_aux=$ENABLE_COARSE_PHASE_AUX enable_text_task_gate=$ENABLE_TEXT_TASK_GATE"
+  echo "enable_persistent_anchor=$ENABLE_PERSISTENT_ANCHOR"
   echo "exp_cfg_opts=$EXP_CFG_OPTS"
   echo "mvt_cfg_opts=$MVT_CFG_OPTS"
   echo "extra_train_args=$EXTRA_TRAIN_ARGS"
