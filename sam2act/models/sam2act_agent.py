@@ -327,6 +327,9 @@ class SAM2Act_Agent:
         use_memory: bool = False,
         num_maskmem: int = 7,
         graph_node_loss_weight: float = 0.0,
+        phase_aux_loss_weight: float = 0.0,
+        phase_aux_num_classes: int = 0,
+        phase_aux_label_key: str = "phase_label",
     ):
         """
         :param gt_hm_sigma: the std of the groundtruth hm, currently for for
@@ -391,6 +394,9 @@ class SAM2Act_Agent:
         self.use_memory = use_memory
         self._num_maskmem = num_maskmem
         self.graph_node_loss_weight = graph_node_loss_weight
+        self.phase_aux_loss_weight = phase_aux_loss_weight
+        self.phase_aux_num_classes = phase_aux_num_classes
+        self.phase_aux_label_key = phase_aux_label_key
 
     def build(self, training: bool, device: torch.device = None):
         self._training = training
@@ -786,15 +792,18 @@ class SAM2Act_Agent:
             pred_out = out["mvt2"] if self.stage_two and "mvt2" in out else out
             graph_node_loss = torch.tensor(0.0, device=self._device)
             graph_node_acc = None
+            phase_aux_loss = torch.tensor(0.0, device=self._device)
+            phase_aux_acc = None
             if (
                 self.graph_node_loss_weight > 0.0
                 and "graph_node_logits" in pred_out
                 and "keypoint_idx" in replay_sample
             ):
                 graph_node_logits = pred_out["graph_node_logits"].view(bs, -1)
-                graph_node_target = replay_sample["keypoint_idx"][:, -1].long().to(
-                    graph_node_logits.device
-                )
+                graph_node_target = replay_sample["keypoint_idx"]
+                if graph_node_target.ndim > 1:
+                    graph_node_target = graph_node_target[:, -1]
+                graph_node_target = graph_node_target.long().to(graph_node_logits.device)
                 valid_mask = (graph_node_target >= 0) & (
                     graph_node_target < graph_node_logits.shape[-1]
                 )
@@ -806,6 +815,29 @@ class SAM2Act_Agent:
                     graph_node_acc = (
                         graph_node_logits[valid_mask].argmax(dim=-1)
                         == graph_node_target[valid_mask]
+                    ).float().mean()
+            if (
+                self.phase_aux_loss_weight > 0.0
+                and self.phase_aux_num_classes > 0
+                and "graph_node_logits" in pred_out
+                and self.phase_aux_label_key in replay_sample
+            ):
+                phase_aux_logits = pred_out["graph_node_logits"].view(bs, -1)
+                phase_aux_target = replay_sample[self.phase_aux_label_key]
+                if phase_aux_target.ndim > 1:
+                    phase_aux_target = phase_aux_target[:, -1]
+                phase_aux_target = phase_aux_target.long().to(phase_aux_logits.device)
+                valid_mask = (phase_aux_target >= 0) & (
+                    phase_aux_target < phase_aux_logits.shape[-1]
+                )
+                if valid_mask.any():
+                    phase_aux_loss = self._cross_entropy_loss(
+                        phase_aux_logits[valid_mask],
+                        phase_aux_target[valid_mask],
+                    ).mean()
+                    phase_aux_acc = (
+                        phase_aux_logits[valid_mask].argmax(dim=-1)
+                        == phase_aux_target[valid_mask]
                     ).float().mean()
 
         loss_log = {}
@@ -862,8 +894,12 @@ class SAM2Act_Agent:
 
                 else:
 
-                    total_loss = trans_loss + (
+                    total_loss = trans_loss
+                    total_loss = total_loss + (
                         self.graph_node_loss_weight * graph_node_loss
+                    )
+                    total_loss = total_loss + (
+                        self.phase_aux_loss_weight * phase_aux_loss
                     )
 
 
@@ -890,6 +926,12 @@ class SAM2Act_Agent:
                 else None,
                 "graph_node_acc": graph_node_acc.item()
                 if graph_node_acc is not None
+                else None,
+                "phase_aux_loss": phase_aux_loss.item()
+                if self.phase_aux_loss_weight > 0.0
+                else None,
+                "phase_aux_acc": phase_aux_acc.item()
+                if phase_aux_acc is not None
                 else None,
                 "lr": self._optimizer.param_groups[0]["lr"],
             }

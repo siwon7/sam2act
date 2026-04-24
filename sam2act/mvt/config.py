@@ -55,6 +55,12 @@ _C.resize_rgb = True
 _C.use_memory = False
 _C.num_maskmem = 7
 _C.graph_node_classes = 0
+_C.memory_gate_enabled = False
+_C.memory_gate_mode = "none"
+_C.memory_gate_use_text = True
+_C.memory_gate_use_task = False
+_C.memory_gate_hidden_dim = 128
+_C.memory_gate_task_cond_dim = 0
 
 _C.sam2_config = '/configs/sam2.1/sam2.1_hiera_b+'
 _C.sam2_ckpt = './mvt/sam2_train/checkpoints/sam2.1_hiera_base_plus.pt'

@@ -100,6 +100,12 @@ class MVT_SAM2_Single(nn.Module):
         use_memory,
         num_maskmem,
         graph_node_classes,
+        memory_gate_enabled=False,
+        memory_gate_mode="none",
+        memory_gate_use_text=True,
+        memory_gate_use_task=False,
+        memory_gate_hidden_dim=128,
+        memory_gate_task_cond_dim=0,
         renderer_device="cuda:0",
         renderer=None,
         no_feat=False,
@@ -203,8 +209,15 @@ class MVT_SAM2_Single(nn.Module):
         self.use_memory = use_memory
         self.num_maskmem = num_maskmem
         self.graph_node_classes = graph_node_classes
+        self.memory_gate_enabled = memory_gate_enabled
+        self.memory_gate_mode = memory_gate_mode
+        self.memory_gate_use_text = memory_gate_use_text
+        self.memory_gate_use_task = memory_gate_use_task
+        self.memory_gate_hidden_dim = memory_gate_hidden_dim
+        self.memory_gate_task_cond_dim = memory_gate_task_cond_dim
 
         self.curr_obs_idx = 0
+        self.memory_gate_context = None
 
         self.memory_bank_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
 
@@ -351,6 +364,29 @@ class MVT_SAM2_Single(nn.Module):
             norm=None,
             activation=None,
         )
+
+        self.memory_gate_dim = getattr(self.sam2, "mem_dim", 128)
+        if self.memory_gate_enabled:
+            if self.memory_gate_use_text and self.add_lang:
+                self.memory_gate_text_proj = nn.Sequential(
+                    nn.Linear(self.lang_emb_dim, self.memory_gate_hidden_dim),
+                    act_layer(activation),
+                    nn.Linear(self.memory_gate_hidden_dim, self.memory_gate_dim),
+                )
+            else:
+                self.memory_gate_text_proj = None
+
+            if self.memory_gate_use_task and self.memory_gate_task_cond_dim > 0:
+                self.memory_gate_task_proj = nn.Sequential(
+                    nn.Linear(self.memory_gate_task_cond_dim, self.memory_gate_hidden_dim),
+                    act_layer(activation),
+                    nn.Linear(self.memory_gate_hidden_dim, self.memory_gate_dim),
+                )
+            else:
+                self.memory_gate_task_proj = None
+        else:
+            self.memory_gate_text_proj = None
+            self.memory_gate_task_proj = None
 
         get_attn_attn = lambda: PreNorm(
             attn_dim,
@@ -540,6 +576,44 @@ class MVT_SAM2_Single(nn.Module):
         self.memory_bank_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
         self.curr_obs_idx = 0
 
+    def _reset_memory_gate_context(self):
+        self.memory_gate_context = None
+
+    def _build_memory_gate_context(self, lang_emb=None, task_cond=None):
+        self._reset_memory_gate_context()
+        if not self.memory_gate_enabled:
+            return
+
+        gate_parts = []
+
+        if self.memory_gate_text_proj is not None and lang_emb is not None:
+            if lang_emb.dim() != 3:
+                raise ValueError(
+                    f"Expected lang_emb to have shape [bs, seq, dim], got {tuple(lang_emb.shape)}"
+                )
+            gate_parts.append(self.memory_gate_text_proj(lang_emb.mean(dim=1)))
+
+        if self.memory_gate_task_proj is not None and task_cond is not None:
+            if task_cond.dim() == 1:
+                task_cond = task_cond.unsqueeze(-1)
+            if task_cond.dim() != 2:
+                raise ValueError(
+                    f"Expected task_cond to have shape [bs, dim], got {tuple(task_cond.shape)}"
+                )
+            gate_parts.append(self.memory_gate_task_proj(task_cond))
+
+        if gate_parts:
+            self.memory_gate_context = torch.sigmoid(
+                torch.stack(gate_parts, dim=0).sum(dim=0)
+            )
+
+    def _select_memory_gate(self, idx, device):
+        if self.memory_gate_context is None:
+            return None
+        if idx < 0 or idx >= self.memory_gate_context.shape[0]:
+            return None
+        return self.memory_gate_context[idx: idx + 1].unsqueeze(0).to(device=device)
+
     def sam2_forward_with_memory(self, net, idx, num_views, feat_sizes):
         GPUdevice = self.rank
         
@@ -584,6 +658,9 @@ class MVT_SAM2_Single(nn.Module):
 
                 memory_fused = torch.cat(to_cat_memory, dim=0)
                 memory_pos_fused = torch.cat(to_cat_memory_pos_embed, dim=0)
+                memory_gate = self._select_memory_gate(idx, memory_fused.device)
+                if memory_gate is not None and self.memory_gate_mode in ("memory", "both"):
+                    memory_fused = memory_fused * memory_gate
                 
                 '''memory attention'''
 
@@ -595,6 +672,8 @@ class MVT_SAM2_Single(nn.Module):
                     memory_pos=memory_pos_fused,
                     num_obj_ptr_tokens=0
                 )
+                if memory_gate is not None and self.memory_gate_mode in ("fusion", "both"):
+                    pix_feat_with_mem = pix_feat_with_mem * memory_gate
 
             else:
                 pix_feat_with_mem = vision_feats[-1] + torch.nn.Parameter(torch.zeros(1, 1, 128)).to(device="cuda")
@@ -677,6 +756,11 @@ class MVT_SAM2_Single(nn.Module):
         assert num_img == self.num_img
         # assert img_feat_dim == self.img_feat_dim
         assert h == w == self.img_size
+
+        self._build_memory_gate_context(
+            lang_emb=lang_emb,
+            task_cond=kwargs.get("task_cond"),
+        )
 
         img_raw = img.clone()
         img = img.view(bs * num_img, img_feat_dim, h, w)

@@ -22,6 +22,7 @@ from rlbench.backend.observation import Observation
 from rlbench.demo import Demo
 
 from sam2act.utils.peract_utils import LOW_DIM_SIZE, IMAGE_SIZE, CAMERAS
+from sam2act.utils.memorybench_phases import get_memorybench_phase_label
 from sam2act.libs.peract.helpers.demo_loading_utils import keypoint_discovery
 from sam2act.libs.peract.helpers.utils import extract_obs
 
@@ -261,6 +262,7 @@ def create_replay_temporal(
     extra_replay_elements = [
         ReplayElement("demo", (), bool),
         ReplayElement("keypoint_idx", (), int),
+        ReplayElement("phase_label", (), int),
         ReplayElement("episode_idx", (), int),
         ReplayElement("keypoint_frame", (), int),
         ReplayElement("next_keypoint_frame", (), int),
@@ -631,6 +633,7 @@ def _add_keypoints_to_replay_temporal(
         others = {
             "demo": True,
             "keypoint_idx": k,
+            "phase_label": get_memorybench_phase_label(task, k, len(episode_keypoints)),
             "episode_idx": episode_idx,
             "keypoint_frame": keypoint_frame,
             "next_keypoint_frame": keypoint,
@@ -781,4 +784,3 @@ def fill_replay_temporal(
             )
 
         print("Replay filled with demos.")
-

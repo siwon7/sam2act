@@ -108,11 +108,17 @@ def train(agent, dataset, training_iterations, log_iter, rank=0, node_rank=0, if
 
             total_loss_avg = sum(loss_log['total_loss'][-100:]) / len(loss_log['total_loss'][-100:])
             trans_loss_avg = sum(loss_log['trans_loss'][-100:]) / len(loss_log['trans_loss'][-100:])
+            phase_aux_msg = ""
+            if loss_log.get("phase_aux_loss"):
+                phase_aux_vals = [v for v in loss_log["phase_aux_loss"][-100:] if v is not None]
+                if phase_aux_vals:
+                    phase_aux_avg = sum(phase_aux_vals) / len(phase_aux_vals)
+                    phase_aux_msg = f" | phase aux loss: {phase_aux_avg}"
 
-            print(f"total loss: {total_loss_avg} | trans loss: {trans_loss_avg}")
+            print(f"total loss: {total_loss_avg} | trans loss: {trans_loss_avg}{phase_aux_msg}")
 
             if ifwandb and node_rank == 0:
-                wandb.log(data = {
+                wandb_data = {
                                     'total_loss': loss_log['total_loss'][iteration],
                                     'trans_loss': loss_log['trans_loss'][iteration],
                                     'rot_loss_x': loss_log['rot_loss_x'][iteration],
@@ -121,8 +127,12 @@ def train(agent, dataset, training_iterations, log_iter, rank=0, node_rank=0, if
                                     'grip_loss': loss_log['grip_loss'][iteration],
                                     'collision_loss': loss_log['collision_loss'][iteration],
                                     'lr': loss_log['lr'][iteration],
-                                    }, 
-                            step = log_iter)
+                                    }
+                if loss_log.get('phase_aux_loss') and loss_log['phase_aux_loss'][iteration] is not None:
+                    wandb_data['phase_aux_loss'] = loss_log['phase_aux_loss'][iteration]
+                if loss_log.get('phase_aux_acc') and loss_log['phase_aux_acc'][iteration] is not None:
+                    wandb_data['phase_aux_acc'] = loss_log['phase_aux_acc'][iteration]
+                wandb.log(data=wandb_data, step=log_iter)
 
         log_iter += 1
 
@@ -243,6 +253,17 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
         mvt_cfg.merge_from_list(cmd_args.mvt_cfg_opts.split(" "))
 
     mvt_cfg.feat_dim = get_num_feat(exp_cfg.peract)
+    if exp_cfg.peract.phase_aux_loss_weight > 0.0:
+        assert exp_cfg.peract.phase_aux_num_classes > 0, (
+            "peract.phase_aux_num_classes must be > 0 when phase aux loss is enabled"
+        )
+        if mvt_cfg.graph_node_classes in [0, exp_cfg.peract.phase_aux_num_classes]:
+            mvt_cfg.graph_node_classes = exp_cfg.peract.phase_aux_num_classes
+        else:
+            raise ValueError(
+                "mvt.graph_node_classes does not match peract.phase_aux_num_classes "
+                f"({mvt_cfg.graph_node_classes} vs {exp_cfg.peract.phase_aux_num_classes})"
+            )
     mvt_cfg.freeze()
 
     # for maintaining backward compatibility

@@ -94,6 +94,12 @@ class MVT_SAM2(nn.Module):
         use_memory,
         num_maskmem,
         graph_node_classes,
+        memory_gate_enabled=False,
+        memory_gate_mode="none",
+        memory_gate_use_text=True,
+        memory_gate_use_task=False,
+        memory_gate_hidden_dim=128,
+        memory_gate_task_cond_dim=0,
         renderer_device="cuda:0",
     ):
         """MultiView Transfomer
@@ -171,6 +177,12 @@ class MVT_SAM2(nn.Module):
         self.use_memory = use_memory
         self.num_maskmem = num_maskmem
         self.graph_node_classes = graph_node_classes
+        self.memory_gate_enabled = memory_gate_enabled
+        self.memory_gate_mode = memory_gate_mode
+        self.memory_gate_use_text = memory_gate_use_text
+        self.memory_gate_use_task = memory_gate_use_task
+        self.memory_gate_hidden_dim = memory_gate_hidden_dim
+        self.memory_gate_task_cond_dim = memory_gate_task_cond_dim
 
         if self.ifSAM2:
             # sam2 = build_sam2_custom(self.sam2_config, self.sam2_ckpt, device="cuda", image_size=self.img_size if not self.resize_rgb else 256) #, num_maskmem=self.num_maskmem)
