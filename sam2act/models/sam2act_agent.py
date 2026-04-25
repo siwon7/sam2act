@@ -786,15 +786,23 @@ class SAM2Act_Agent:
             )
 
             pred_out = out["mvt2"] if self.stage_two and "mvt2" in out else out
+            graph_node_logits = None
+            if isinstance(pred_out, dict):
+                graph_node_logits = pred_out.get("graph_node_logits")
+            if graph_node_logits is None and isinstance(out, dict):
+                graph_node_logits = out.get("graph_node_logits")
             graph_node_loss = torch.tensor(0.0, device=self._device)
             graph_node_acc = None
             if (
                 self.graph_node_loss_weight > 0.0
-                and "graph_node_logits" in pred_out
+                and graph_node_logits is not None
                 and "keypoint_idx" in replay_sample
             ):
-                graph_node_logits = pred_out["graph_node_logits"].view(bs, -1)
-                graph_node_target = replay_sample["keypoint_idx"][:, -1].long().to(
+                graph_node_logits = graph_node_logits.view(bs, -1)
+                graph_node_target = replay_sample["keypoint_idx"]
+                if graph_node_target.dim() > 1:
+                    graph_node_target = graph_node_target[:, -1]
+                graph_node_target = graph_node_target.long().to(
                     graph_node_logits.device
                 )
                 valid_mask = (graph_node_target >= 0) & (
