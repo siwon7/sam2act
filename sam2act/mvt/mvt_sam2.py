@@ -208,13 +208,17 @@ class MVT_SAM2(nn.Module):
             self.mvt1 = MVT_SAM2_Single(
                 **args,
                 renderer=self.renderer,
-                no_feat=self.stage_two,
+                no_feat=self.stage_two and self.graph_node_classes <= 0,
                 sam2=self.sam2,
             )
 
             if self.use_memory:
                 for name, param in self.mvt1.named_parameters():
-                    if "sam" not in name and "up0" not in name:
+                    keep_graph_head = (
+                        self.graph_node_classes > 0
+                        and ("graph_node_head" in name or "feat_fc" in name)
+                    )
+                    if "sam" not in name and "up0" not in name and not keep_graph_head:
                         param.requires_grad = False
 
         if self.stage_two:
@@ -227,7 +231,11 @@ class MVT_SAM2(nn.Module):
                 
                 if self.use_memory:
                     for name, param in self.mvt2.named_parameters():
-                        if "sam" not in name:
+                        keep_graph_head = (
+                            self.graph_node_classes > 0
+                            and ("graph_node_head" in name or "feat_fc" in name)
+                        )
+                        if "sam" not in name and not keep_graph_head:
                             param.requires_grad = False
 
     def get_pt_loc_on_img(self, pt, mvt1_or_mvt2, dyn_cam_info, out=None):
