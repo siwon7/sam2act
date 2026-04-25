@@ -109,6 +109,10 @@ class MVT_SAM2_Single(nn.Module):
         persistent_anchor_enabled=False,
         persistent_anchor_max_steps=2,
         persistent_anchor_prepend=True,
+        graph_retrieval_enabled=False,
+        graph_retrieval_num_classes=0,
+        graph_retrieval_hidden_dim=128,
+        graph_retrieval_bias_scale=0.0,
         renderer_device="cuda:0",
         renderer=None,
         no_feat=False,
@@ -221,6 +225,10 @@ class MVT_SAM2_Single(nn.Module):
         self.persistent_anchor_enabled = persistent_anchor_enabled
         self.persistent_anchor_max_steps = persistent_anchor_max_steps
         self.persistent_anchor_prepend = persistent_anchor_prepend
+        self.graph_retrieval_enabled = graph_retrieval_enabled
+        self.graph_retrieval_num_classes = graph_retrieval_num_classes
+        self.graph_retrieval_hidden_dim = graph_retrieval_hidden_dim
+        self.graph_retrieval_bias_scale = graph_retrieval_bias_scale
 
         self.curr_obs_idx = 0
         self.memory_gate_context = None
@@ -401,6 +409,24 @@ class MVT_SAM2_Single(nn.Module):
             )
         else:
             self.register_parameter("persistent_anchor_tpos_enc", None)
+
+        if self.graph_retrieval_enabled and self.graph_retrieval_num_classes > 0:
+            self.graph_retrieval_query_proj = nn.Sequential(
+                nn.Linear(self.memory_gate_dim, self.graph_retrieval_hidden_dim),
+                act_layer(activation),
+                nn.Linear(self.graph_retrieval_hidden_dim, self.memory_gate_dim),
+            )
+            self.graph_retrieval_mode_head = nn.Linear(self.memory_gate_dim, 2)
+            self.graph_retrieval_ref_head = nn.Linear(
+                self.memory_gate_dim, self.graph_retrieval_num_classes
+            )
+            self.graph_retrieval_query_proj.apply(initialize_weights)
+            self.graph_retrieval_mode_head.apply(initialize_weights)
+            self.graph_retrieval_ref_head.apply(initialize_weights)
+        else:
+            self.graph_retrieval_query_proj = None
+            self.graph_retrieval_mode_head = None
+            self.graph_retrieval_ref_head = None
 
         get_attn_attn = lambda: PreNorm(
             attn_dim,
@@ -640,10 +666,45 @@ class MVT_SAM2_Single(nn.Module):
             return None
         return self.memory_gate_context[idx: idx + 1].unsqueeze(0).to(device=device)
 
+    def _compute_graph_retrieval_logits(self, vision_feats):
+        if not self.graph_retrieval_enabled or self.graph_retrieval_query_proj is None:
+            return None, None
+        query = vision_feats[-1].mean(dim=0)
+        query = self.graph_retrieval_query_proj(query)
+        return (
+            self.graph_retrieval_mode_head(query),
+            self.graph_retrieval_ref_head(query),
+        )
+
+    def _compute_graph_retrieval_scale(
+        self,
+        node_tag,
+        mode_logits,
+        ref_logits,
+        device,
+    ):
+        if (
+            not self.graph_retrieval_enabled
+            or self.graph_retrieval_bias_scale <= 0.0
+            or node_tag is None
+            or node_tag < 0
+            or node_tag >= self.graph_retrieval_num_classes
+            or mode_logits is None
+            or ref_logits is None
+        ):
+            return None
+
+        revisit_prob = torch.softmax(mode_logits.to(device=device), dim=-1)[:, 1]
+        ref_prob = torch.sigmoid(ref_logits.to(device=device))[:, node_tag]
+        scale = 1.0 + self.graph_retrieval_bias_scale * revisit_prob * ref_prob
+        return scale.view(1, 1, 1)
+
     def sam2_forward_with_memory(self, net, idx, num_views, feat_sizes):
         GPUdevice = self.rank
         
         image_embed_list = []
+        retrieval_mode_logits = None
+        retrieval_ref_logits = None
 
         for view_idx in range(num_views):
             
@@ -652,6 +713,10 @@ class MVT_SAM2_Single(nn.Module):
             vision_feats = [self.vision_feats_all[-1][:,idx*num_views+view_idx,:].unsqueeze(1).clone().cuda()]
             
             vision_pos_embeds= [self.vision_pos_embeds_all[-1][:,idx*num_views+view_idx,:].unsqueeze(1).clone().cuda()]
+            if view_idx == 0:
+                retrieval_mode_logits, retrieval_ref_logits = (
+                    self._compute_graph_retrieval_logits(vision_feats)
+                )
 
             '''retrieve memory from memory bank'''
 
@@ -677,6 +742,15 @@ class MVT_SAM2_Single(nn.Module):
                     # "maskmem_features" might have been offloaded to CPU in demo use cases,
                     # so we load it back to GPU (it's a no-op if it's already on GPU).
                     feats = prev[0].cuda()
+                    node_tag = prev[2] if len(prev) > 2 else None
+                    scale = self._compute_graph_retrieval_scale(
+                        node_tag=node_tag,
+                        mode_logits=retrieval_mode_logits,
+                        ref_logits=retrieval_ref_logits,
+                        device=feats.device,
+                    )
+                    if scale is not None:
+                        feats = feats * scale
                     to_cat_memory.append(feats)
                     # Spatial positional encoding (it might have been offloaded to CPU in eval)
                     maskmem_enc = prev[1].cuda()
@@ -691,6 +765,15 @@ class MVT_SAM2_Single(nn.Module):
                 anchor_memory_pos = []
                 for _, anchor_prev in anchor_entries:
                     feats = anchor_prev[0].cuda()
+                    node_tag = anchor_prev[2] if len(anchor_prev) > 2 else None
+                    scale = self._compute_graph_retrieval_scale(
+                        node_tag=node_tag,
+                        mode_logits=retrieval_mode_logits,
+                        ref_logits=retrieval_ref_logits,
+                        device=feats.device,
+                    )
+                    if scale is not None:
+                        feats = feats * scale
                     anchor_memory.append(feats)
                     anchor_enc = anchor_prev[1].cuda()
                     if self.persistent_anchor_tpos_enc is not None:
@@ -737,9 +820,9 @@ class MVT_SAM2_Single(nn.Module):
 
         final_image_embeds = image_embeds.to(GPUdevice)
 
-        return final_image_embeds
+        return final_image_embeds, retrieval_mode_logits, retrieval_ref_logits
 
-    def sam2_add_new_memory(self, net, hm, idx, num_views, feat_sizes):
+    def sam2_add_new_memory(self, net, hm, idx, num_views, feat_sizes, node_tag=None):
         GPUdevice = self.rank
 
         for view_idx in range(num_views):
@@ -781,7 +864,12 @@ class MVT_SAM2_Single(nn.Module):
 
             memory_bank_list = self.memory_bank_multiview[view_idx]
 
-            memory_bank_list[self.curr_obs_idx] = [memory, memory_pos]
+            if node_tag is None:
+                node_tag_to_store = int(self.curr_obs_idx)
+            else:
+                node_tag_to_store = int(node_tag)
+
+            memory_bank_list[self.curr_obs_idx] = [memory, memory_pos, node_tag_to_store]
             if (
                 self.persistent_anchor_enabled
                 and self.curr_obs_idx < self.persistent_anchor_max_steps
@@ -789,6 +877,7 @@ class MVT_SAM2_Single(nn.Module):
                 self.anchor_memory_bank_multiview[view_idx][self.curr_obs_idx] = [
                     memory,
                     memory_pos,
+                    node_tag_to_store,
                 ]
 
     def forward(
@@ -818,6 +907,11 @@ class MVT_SAM2_Single(nn.Module):
             lang_emb=lang_emb,
             task_cond=kwargs.get("task_cond"),
         )
+        graph_node_idx_seq = kwargs.get("graph_node_idx")
+        if graph_node_idx_seq is not None:
+            if not torch.is_tensor(graph_node_idx_seq):
+                graph_node_idx_seq = torch.as_tensor(graph_node_idx_seq)
+            graph_node_idx_seq = graph_node_idx_seq.view(-1).detach().cpu()
 
         img_raw = img.clone()
         img = img.view(bs * num_img, img_feat_dim, h, w)
@@ -967,6 +1061,9 @@ class MVT_SAM2_Single(nn.Module):
         x = x.view(bs, *ins_orig_shape[1:-1], x.shape[-1])  # [B, num_img, np, np, 128]
         x = rearrange(x, "b ... d -> b d ...")  # [B, 128, num_img, np, np]
 
+        retrieval_mode_logits = None
+        retrieval_ref_logits = None
+
         feat = []
         _feat = torch.max(torch.max(x, dim=-1)[0], dim=-1)[0]
         # _feat = _feat.view(bs, -1)
@@ -1026,15 +1123,25 @@ class MVT_SAM2_Single(nn.Module):
                 x_ = []
                 u_ = []
                 trans_ = []
+                retrieval_mode_logits_ = []
+                retrieval_ref_logits_ = []
                 for seq_idx in range(num_seq):
                     self.reset_memory_bank()
 
                     for obs_idx in range(num_obs):
 
                         idx = num_obs * seq_idx + obs_idx
-                        x_i = self.sam2_forward_with_memory(self.sam2, idx, num_img, feat_sizes)
+                        x_i, retrieval_mode_logits_i, retrieval_ref_logits_i = (
+                            self.sam2_forward_with_memory(
+                                self.sam2, idx, num_img, feat_sizes
+                            )
+                        )
 
                         x_.append(x_i)
+                        if retrieval_mode_logits_i is not None:
+                            retrieval_mode_logits_.append(retrieval_mode_logits_i)
+                        if retrieval_ref_logits_i is not None:
+                            retrieval_ref_logits_.append(retrieval_ref_logits_i)
 
                         if self.cvx_up:
                             with torch.cuda.amp.autocast(enabled=False):
@@ -1065,13 +1172,35 @@ class MVT_SAM2_Single(nn.Module):
                         trans_.append(trans)
 
                         if self.use_memory:
-                            self.sam2_add_new_memory(self.sam2, trans.view(bs, num_img, 1, 1, h, w), idx, num_img, feat_sizes)
+                            node_tag = (
+                                int(graph_node_idx_seq[idx].item())
+                                if graph_node_idx_seq is not None
+                                else int(self.curr_obs_idx)
+                            )
+                            self.sam2_add_new_memory(
+                                self.sam2,
+                                trans.view(bs, num_img, 1, 1, h, w),
+                                idx,
+                                num_img,
+                                feat_sizes,
+                                node_tag=node_tag,
+                            )
                             self.curr_obs_idx += 1
 
                 x = torch.cat(x_, dim=0)
                 if not self.cvx_up:
                     u = torch.cat(u_, dim=0)
                 trans = torch.cat(trans_, dim=0)
+                retrieval_mode_logits = (
+                    torch.cat(retrieval_mode_logits_, dim=0)
+                    if retrieval_mode_logits_
+                    else None
+                )
+                retrieval_ref_logits = (
+                    torch.cat(retrieval_ref_logits_, dim=0)
+                    if retrieval_ref_logits_
+                    else None
+                )
                 bs = bs_
 
 
@@ -1079,7 +1208,9 @@ class MVT_SAM2_Single(nn.Module):
 
             else:
                 with torch.cuda.amp.autocast(enabled=True):
-                    x = self.sam2_forward_with_memory(self.sam2, 0, num_img, feat_sizes)
+                    x, retrieval_mode_logits, retrieval_ref_logits = (
+                        self.sam2_forward_with_memory(self.sam2, 0, num_img, feat_sizes)
+                    )
                 if self.cvx_up:
                     with torch.cuda.amp.autocast(enabled=False):
                         conv1, ln1, act1, conv2, ln2, act2, up, conv3 = self.up0
@@ -1107,7 +1238,14 @@ class MVT_SAM2_Single(nn.Module):
 
                 if self.use_memory:
                     with torch.cuda.amp.autocast(enabled=True):
-                        self.sam2_add_new_memory(self.sam2, trans.view(bs, num_img, 1, 1, h, w), 0, num_img, feat_sizes)
+                        self.sam2_add_new_memory(
+                            self.sam2,
+                            trans.view(bs, num_img, 1, 1, h, w),
+                            0,
+                            num_img,
+                            feat_sizes,
+                            node_tag=int(self.curr_obs_idx),
+                        )
                     self.curr_obs_idx += 1
                 
         if not self.no_feat:
@@ -1234,6 +1372,11 @@ class MVT_SAM2_Single(nn.Module):
                     ).unsqueeze(1)
         else:
             out = {}
+
+        if retrieval_mode_logits is not None:
+            out["retrieval_mode_logits"] = retrieval_mode_logits.unsqueeze(1)
+        if retrieval_ref_logits is not None:
+            out["retrieval_ref_logits"] = retrieval_ref_logits.unsqueeze(1)
 
         out.update({"trans": trans})
 

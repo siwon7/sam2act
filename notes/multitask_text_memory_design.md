@@ -77,6 +77,48 @@ Why:
   available at the end of the sequence
 - this follows the anchor-memory lesson from recent memory-policy work
 
+## 5. Graph Retrieval Probe and Soft Bias
+
+This branch now adds a conservative graph-retrieval mechanism on top of the
+memory bank.
+
+Replay stores:
+
+- `graph_mode_label`: whether the current step should behave like a `new`
+  subgoal or a `revisit` step
+- `graph_ref_mask`: a multi-hot mask over candidate prior keypoint nodes
+- `graph_ref_valid`: whether a retrieval target is defined for the step
+
+For `put_block_back`, the current mapping is explicit and conservative:
+
+- step `9` prefers `{1, 7, 8}`
+- step `10` prefers `{0, 1, 9}`
+- step `11` prefers `{0, 1, 10}`
+
+Model side:
+
+- a retrieval query is produced from current visual features
+- `retrieval_mode_logits` predicts `new` vs `revisit`
+- `retrieval_ref_logits` scores prior graph nodes
+- stored memory entries carry a `node_tag`
+- retrieval scores induce a **soft multiplicative bias** on matching memory
+  entries instead of hard pruning
+
+Why soft bias first:
+
+- skeptical review showed that hard graph retrieval can easily harden the wrong
+  prior and collapse to a shortcut
+- teacher-forced analysis suggested the real issue is not total lack of early
+  evidence, but biased retrieval anchors
+- soft bias lets us diagnose and nudge retrieval without forcing brittle exact
+  routing
+
+Current limitation:
+
+- only `put_block_back` has explicit graph targets today
+- the retrieval module is meant as a probe and gentle prior, not yet a fully
+  hard pointer policy
+
 ## Current Config Knobs
 
 ### peract
@@ -84,6 +126,11 @@ Why:
 - `peract.phase_aux_loss_weight`
 - `peract.phase_aux_num_classes`
 - `peract.phase_aux_label_key`
+- `peract.graph_retrieval_mode_loss_weight`
+- `peract.graph_retrieval_ref_loss_weight`
+- `peract.graph_retrieval_mode_label_key`
+- `peract.graph_retrieval_ref_valid_key`
+- `peract.graph_retrieval_ref_label_key`
 
 ### mvt
 
@@ -96,6 +143,10 @@ Why:
 - `persistent_anchor_enabled`
 - `persistent_anchor_max_steps`
 - `persistent_anchor_prepend`
+- `graph_retrieval_enabled`
+- `graph_retrieval_num_classes`
+- `graph_retrieval_hidden_dim`
+- `graph_retrieval_bias_scale`
 
 ## Recommended First Experiments
 
@@ -135,6 +186,18 @@ Purpose:
 - test whether language-conditioned routing improves which memory bank entries
   are emphasized
 
+### F. Add graph retrieval probe
+
+- `graph_retrieval_enabled True`
+- `graph_retrieval_num_classes 12`
+- non-zero `graph_retrieval_mode_loss_weight`
+- non-zero `graph_retrieval_ref_loss_weight`
+- modest `graph_retrieval_bias_scale` such as `0.25 ~ 0.5`
+
+Purpose:
+- test whether explicit revisit/new supervision and soft retrieval bias reduce
+  the button-anchor collapse observed in `put_block_back`
+
 ## Not Yet Implemented
 
 These are the next ideas, not part of the current commit:
@@ -144,6 +207,7 @@ These are the next ideas, not part of the current commit:
   states during return phases
 - past-observation prediction / reconstruction auxiliary objective
 - task-specific persistent anchor policies beyond "first k steps"
+- hard pointer-style retrieval with phase-gated candidate pruning
 
 ## Branching Strategy
 

@@ -64,6 +64,10 @@ _C.memory_gate_task_cond_dim = 0
 _C.persistent_anchor_enabled = False
 _C.persistent_anchor_max_steps = 2
 _C.persistent_anchor_prepend = True
+_C.graph_retrieval_enabled = False
+_C.graph_retrieval_num_classes = 0
+_C.graph_retrieval_hidden_dim = 128
+_C.graph_retrieval_bias_scale = 0.0
 
 _C.sam2_config = '/configs/sam2.1/sam2.1_hiera_b+'
 _C.sam2_ckpt = './mvt/sam2_train/checkpoints/sam2.1_hiera_base_plus.pt'

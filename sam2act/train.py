@@ -114,8 +114,17 @@ def train(agent, dataset, training_iterations, log_iter, rank=0, node_rank=0, if
                 if phase_aux_vals:
                     phase_aux_avg = sum(phase_aux_vals) / len(phase_aux_vals)
                     phase_aux_msg = f" | phase aux loss: {phase_aux_avg}"
+            retrieval_msg = ""
+            if loss_log.get("retrieval_mode_loss"):
+                mode_vals = [v for v in loss_log["retrieval_mode_loss"][-100:] if v is not None]
+                if mode_vals:
+                    retrieval_msg += f" | retrieval mode loss: {sum(mode_vals) / len(mode_vals)}"
+            if loss_log.get("retrieval_ref_loss"):
+                ref_vals = [v for v in loss_log["retrieval_ref_loss"][-100:] if v is not None]
+                if ref_vals:
+                    retrieval_msg += f" | retrieval ref loss: {sum(ref_vals) / len(ref_vals)}"
 
-            print(f"total loss: {total_loss_avg} | trans loss: {trans_loss_avg}{phase_aux_msg}")
+            print(f"total loss: {total_loss_avg} | trans loss: {trans_loss_avg}{phase_aux_msg}{retrieval_msg}")
 
             if ifwandb and node_rank == 0:
                 wandb_data = {
@@ -132,6 +141,14 @@ def train(agent, dataset, training_iterations, log_iter, rank=0, node_rank=0, if
                     wandb_data['phase_aux_loss'] = loss_log['phase_aux_loss'][iteration]
                 if loss_log.get('phase_aux_acc') and loss_log['phase_aux_acc'][iteration] is not None:
                     wandb_data['phase_aux_acc'] = loss_log['phase_aux_acc'][iteration]
+                if loss_log.get('retrieval_mode_loss') and loss_log['retrieval_mode_loss'][iteration] is not None:
+                    wandb_data['retrieval_mode_loss'] = loss_log['retrieval_mode_loss'][iteration]
+                if loss_log.get('retrieval_mode_acc') and loss_log['retrieval_mode_acc'][iteration] is not None:
+                    wandb_data['retrieval_mode_acc'] = loss_log['retrieval_mode_acc'][iteration]
+                if loss_log.get('retrieval_ref_loss') and loss_log['retrieval_ref_loss'][iteration] is not None:
+                    wandb_data['retrieval_ref_loss'] = loss_log['retrieval_ref_loss'][iteration]
+                if loss_log.get('retrieval_ref_top3_acc') and loss_log['retrieval_ref_top3_acc'][iteration] is not None:
+                    wandb_data['retrieval_ref_top3_acc'] = loss_log['retrieval_ref_top3_acc'][iteration]
                 wandb.log(data=wandb_data, step=log_iter)
 
         log_iter += 1
@@ -264,6 +281,16 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
                 "mvt.graph_node_classes does not match peract.phase_aux_num_classes "
                 f"({mvt_cfg.graph_node_classes} vs {exp_cfg.peract.phase_aux_num_classes})"
             )
+    if (
+        exp_cfg.peract.graph_retrieval_mode_loss_weight > 0.0
+        or exp_cfg.peract.graph_retrieval_ref_loss_weight > 0.0
+    ):
+        assert mvt_cfg.graph_retrieval_enabled, (
+            "mvt.graph_retrieval_enabled must be True when graph retrieval losses are enabled"
+        )
+        assert mvt_cfg.graph_retrieval_num_classes > 0, (
+            "mvt.graph_retrieval_num_classes must be > 0 when graph retrieval losses are enabled"
+        )
     mvt_cfg.freeze()
 
     # for maintaining backward compatibility

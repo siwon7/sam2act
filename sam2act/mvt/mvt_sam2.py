@@ -103,6 +103,10 @@ class MVT_SAM2(nn.Module):
         persistent_anchor_enabled=False,
         persistent_anchor_max_steps=2,
         persistent_anchor_prepend=True,
+        graph_retrieval_enabled=False,
+        graph_retrieval_num_classes=0,
+        graph_retrieval_hidden_dim=128,
+        graph_retrieval_bias_scale=0.0,
         renderer_device="cuda:0",
     ):
         """MultiView Transfomer
@@ -189,6 +193,10 @@ class MVT_SAM2(nn.Module):
         self.persistent_anchor_enabled = persistent_anchor_enabled
         self.persistent_anchor_max_steps = persistent_anchor_max_steps
         self.persistent_anchor_prepend = persistent_anchor_prepend
+        self.graph_retrieval_enabled = graph_retrieval_enabled
+        self.graph_retrieval_num_classes = graph_retrieval_num_classes
+        self.graph_retrieval_hidden_dim = graph_retrieval_hidden_dim
+        self.graph_retrieval_bias_scale = graph_retrieval_bias_scale
 
         if self.ifSAM2:
             # sam2 = build_sam2_custom(self.sam2_config, self.sam2_ckpt, device="cuda", image_size=self.img_size if not self.resize_rgb else 256) #, num_maskmem=self.num_maskmem)
@@ -232,7 +240,12 @@ class MVT_SAM2(nn.Module):
 
             if self.use_memory:
                 for name, param in self.mvt1.named_parameters():
-                    if "sam" not in name and "up0" not in name:
+                    if (
+                        "sam" not in name
+                        and "up0" not in name
+                        and "graph_node" not in name
+                        and "graph_retrieval" not in name
+                    ):
                         param.requires_grad = False
 
         if self.stage_two:
@@ -245,7 +258,11 @@ class MVT_SAM2(nn.Module):
                 
                 if self.use_memory:
                     for name, param in self.mvt2.named_parameters():
-                        if "sam" not in name:
+                        if (
+                            "sam" not in name
+                            and "graph_node" not in name
+                            and "graph_retrieval" not in name
+                        ):
                             param.requires_grad = False
 
     def get_pt_loc_on_img(self, pt, mvt1_or_mvt2, dyn_cam_info, out=None):

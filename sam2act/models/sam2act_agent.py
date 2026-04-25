@@ -330,6 +330,11 @@ class SAM2Act_Agent:
         phase_aux_loss_weight: float = 0.0,
         phase_aux_num_classes: int = 0,
         phase_aux_label_key: str = "phase_label",
+        graph_retrieval_mode_loss_weight: float = 0.0,
+        graph_retrieval_ref_loss_weight: float = 0.0,
+        graph_retrieval_mode_label_key: str = "graph_mode_label",
+        graph_retrieval_ref_valid_key: str = "graph_ref_valid",
+        graph_retrieval_ref_label_key: str = "graph_ref_mask",
     ):
         """
         :param gt_hm_sigma: the std of the groundtruth hm, currently for for
@@ -397,6 +402,12 @@ class SAM2Act_Agent:
         self.phase_aux_loss_weight = phase_aux_loss_weight
         self.phase_aux_num_classes = phase_aux_num_classes
         self.phase_aux_label_key = phase_aux_label_key
+        self.graph_retrieval_mode_loss_weight = graph_retrieval_mode_loss_weight
+        self.graph_retrieval_ref_loss_weight = graph_retrieval_ref_loss_weight
+        self.graph_retrieval_mode_label_key = graph_retrieval_mode_label_key
+        self.graph_retrieval_ref_valid_key = graph_retrieval_ref_valid_key
+        self.graph_retrieval_ref_label_key = graph_retrieval_ref_label_key
+        self._bce_with_logits_loss = nn.BCEWithLogitsLoss(reduction="none")
 
     def build(self, training: bool, device: torch.device = None):
         self._training = training
@@ -404,17 +415,24 @@ class SAM2Act_Agent:
 
         sam_mem_params = []
         upsample_params = []
+        other_trainable_params = []
         
         for name, param in self._network.named_parameters():
+            if not param.requires_grad:
+                continue
             if "sam" in name and "image encoder" not in name:
                 sam_mem_params.append(param)
             elif "up0" in name:
                 upsample_params.append(param)
+            else:
+                other_trainable_params.append(param)
 
         param_groups = [
             {"params": sam_mem_params, "lr": self._lr * 2},  # SAM2 (memory)
             {"params": upsample_params, "lr": self._lr},  # upsample layers
         ]
+        if other_trainable_params:
+            param_groups.append({"params": other_trainable_params, "lr": self._lr})
 
         if self._optimizer_type == "lamb":
             if self.bnb:
@@ -778,6 +796,7 @@ class SAM2Act_Agent:
                 img_aug=img_aug,
                 wpt_local=wpt_local if self._network.training else None,
                 rot_x_y=rot_x_y if self.rot_ver == 1 else None,
+                graph_node_idx=replay_sample.get("keypoint_idx"),
                 # hm_gt=hm_gt,
             )
 
@@ -794,6 +813,10 @@ class SAM2Act_Agent:
             graph_node_acc = None
             phase_aux_loss = torch.tensor(0.0, device=self._device)
             phase_aux_acc = None
+            retrieval_mode_loss = torch.tensor(0.0, device=self._device)
+            retrieval_mode_acc = None
+            retrieval_ref_loss = torch.tensor(0.0, device=self._device)
+            retrieval_ref_top3_acc = None
             if (
                 self.graph_node_loss_weight > 0.0
                 and "graph_node_logits" in pred_out
@@ -839,6 +862,64 @@ class SAM2Act_Agent:
                         phase_aux_logits[valid_mask].argmax(dim=-1)
                         == phase_aux_target[valid_mask]
                     ).float().mean()
+            if (
+                self.graph_retrieval_mode_loss_weight > 0.0
+                and "retrieval_mode_logits" in pred_out
+                and self.graph_retrieval_mode_label_key in replay_sample
+            ):
+                retrieval_mode_logits = pred_out["retrieval_mode_logits"].view(bs, -1)
+                retrieval_mode_target = replay_sample[
+                    self.graph_retrieval_mode_label_key
+                ]
+                if retrieval_mode_target.ndim > 1:
+                    retrieval_mode_target = retrieval_mode_target[:, -1]
+                retrieval_mode_target = retrieval_mode_target.long().to(
+                    retrieval_mode_logits.device
+                )
+                valid_mask = (retrieval_mode_target >= 0) & (
+                    retrieval_mode_target < retrieval_mode_logits.shape[-1]
+                )
+                if valid_mask.any():
+                    retrieval_mode_loss = self._cross_entropy_loss(
+                        retrieval_mode_logits[valid_mask],
+                        retrieval_mode_target[valid_mask],
+                    ).mean()
+                    retrieval_mode_acc = (
+                        retrieval_mode_logits[valid_mask].argmax(dim=-1)
+                        == retrieval_mode_target[valid_mask]
+                    ).float().mean()
+            if (
+                self.graph_retrieval_ref_loss_weight > 0.0
+                and "retrieval_ref_logits" in pred_out
+                and self.graph_retrieval_ref_label_key in replay_sample
+                and self.graph_retrieval_ref_valid_key in replay_sample
+            ):
+                retrieval_ref_logits = pred_out["retrieval_ref_logits"].view(bs, -1)
+                retrieval_ref_target = replay_sample[
+                    self.graph_retrieval_ref_label_key
+                ].float().to(retrieval_ref_logits.device).view(bs, -1)
+                retrieval_ref_valid = replay_sample[
+                    self.graph_retrieval_ref_valid_key
+                ]
+                if retrieval_ref_valid.ndim > 1:
+                    retrieval_ref_valid = retrieval_ref_valid[:, -1]
+                retrieval_ref_valid = retrieval_ref_valid.long().to(
+                    retrieval_ref_logits.device
+                )
+                valid_mask = retrieval_ref_valid > 0
+                if valid_mask.any():
+                    retrieval_ref_loss = self._bce_with_logits_loss(
+                        retrieval_ref_logits[valid_mask],
+                        retrieval_ref_target[valid_mask],
+                    ).mean()
+                    topk = min(3, retrieval_ref_logits.shape[-1])
+                    topk_idx = torch.topk(
+                        retrieval_ref_logits[valid_mask], k=topk, dim=-1
+                    ).indices
+                    topk_hits = torch.gather(
+                        retrieval_ref_target[valid_mask], 1, topk_idx
+                    ).sum(dim=-1) > 0
+                    retrieval_ref_top3_acc = topk_hits.float().mean()
 
         loss_log = {}
         if backprop:
@@ -901,6 +982,12 @@ class SAM2Act_Agent:
                     total_loss = total_loss + (
                         self.phase_aux_loss_weight * phase_aux_loss
                     )
+                    total_loss = total_loss + (
+                        self.graph_retrieval_mode_loss_weight * retrieval_mode_loss
+                    )
+                    total_loss = total_loss + (
+                        self.graph_retrieval_ref_loss_weight * retrieval_ref_loss
+                    )
 
 
             self._optimizer.zero_grad(set_to_none=True)
@@ -932,6 +1019,18 @@ class SAM2Act_Agent:
                 else None,
                 "phase_aux_acc": phase_aux_acc.item()
                 if phase_aux_acc is not None
+                else None,
+                "retrieval_mode_loss": retrieval_mode_loss.item()
+                if self.graph_retrieval_mode_loss_weight > 0.0
+                else None,
+                "retrieval_mode_acc": retrieval_mode_acc.item()
+                if retrieval_mode_acc is not None
+                else None,
+                "retrieval_ref_loss": retrieval_ref_loss.item()
+                if self.graph_retrieval_ref_loss_weight > 0.0
+                else None,
+                "retrieval_ref_top3_acc": retrieval_ref_top3_acc.item()
+                if retrieval_ref_top3_acc is not None
                 else None,
                 "lr": self._optimizer.param_groups[0]["lr"],
             }

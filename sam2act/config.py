@@ -46,6 +46,11 @@ _C.peract.graph_node_loss_weight = 0.0
 _C.peract.phase_aux_loss_weight = 0.0
 _C.peract.phase_aux_num_classes = 0
 _C.peract.phase_aux_label_key = "phase_label"
+_C.peract.graph_retrieval_mode_loss_weight = 0.0
+_C.peract.graph_retrieval_ref_loss_weight = 0.0
+_C.peract.graph_retrieval_mode_label_key = "graph_mode_label"
+_C.peract.graph_retrieval_ref_valid_key = "graph_ref_valid"
+_C.peract.graph_retrieval_ref_label_key = "graph_ref_mask"
 
 # arguments present in only rvt and not peract
 _C.rvt = CN()
