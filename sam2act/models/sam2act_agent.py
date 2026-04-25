@@ -327,6 +327,7 @@ class SAM2Act_Agent:
         use_memory: bool = False,
         num_maskmem: int = 7,
         graph_node_loss_weight: float = 0.0,
+        graph_node_only_loss: bool = False,
     ):
         """
         :param gt_hm_sigma: the std of the groundtruth hm, currently for for
@@ -391,6 +392,7 @@ class SAM2Act_Agent:
         self.use_memory = use_memory
         self._num_maskmem = num_maskmem
         self.graph_node_loss_weight = graph_node_loss_weight
+        self.graph_node_only_loss = graph_node_only_loss
 
     def build(self, training: bool, device: torch.device = None):
         self._training = training
@@ -862,9 +864,12 @@ class SAM2Act_Agent:
 
                 else:
 
-                    total_loss = trans_loss + (
-                        self.graph_node_loss_weight * graph_node_loss
-                    )
+                    if self.graph_node_only_loss:
+                        total_loss = self.graph_node_loss_weight * graph_node_loss
+                    else:
+                        total_loss = trans_loss + (
+                            self.graph_node_loss_weight * graph_node_loss
+                        )
 
 
             self._optimizer.zero_grad(set_to_none=True)
@@ -891,6 +896,7 @@ class SAM2Act_Agent:
                 "graph_node_acc": graph_node_acc.item()
                 if graph_node_acc is not None
                 else None,
+                "graph_node_only_loss": self.graph_node_only_loss,
                 "lr": self._optimizer.param_groups[0]["lr"],
             }
             manage_loss_log(self, loss_log, reset_log=reset_log)
