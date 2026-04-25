@@ -381,6 +381,7 @@ class MVT_SAM2_Single(nn.Module):
         )
 
         self.memory_gate_dim = getattr(self.sam2, "mem_dim", 128)
+        self.graph_retrieval_input_dim = getattr(self.sam2, "hidden_dim", 128)
         if self.memory_gate_enabled:
             if self.memory_gate_use_text and self.add_lang:
                 self.memory_gate_text_proj = nn.Sequential(
@@ -412,7 +413,7 @@ class MVT_SAM2_Single(nn.Module):
 
         if self.graph_retrieval_enabled and self.graph_retrieval_num_classes > 0:
             self.graph_retrieval_query_proj = nn.Sequential(
-                nn.Linear(self.memory_gate_dim, self.graph_retrieval_hidden_dim),
+                nn.Linear(self.graph_retrieval_input_dim, self.graph_retrieval_hidden_dim),
                 act_layer(activation),
                 nn.Linear(self.graph_retrieval_hidden_dim, self.memory_gate_dim),
             )

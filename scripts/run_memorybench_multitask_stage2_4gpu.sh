@@ -142,6 +142,7 @@ export LD_LIBRARY_PATH="$COPPELIASIM_ROOT:/home/cv25/miniconda3/envs/sam2act5090
 export PYTHONUNBUFFERED=1
 export WANDB_MODE=offline
 export CUDA_VISIBLE_DEVICES="$CUDA_DEVICES"
+export PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
 cd "$CODE_ROOT"
 
@@ -162,7 +163,6 @@ read -r -a EXTRA_TRAIN_ARGV <<< "$EXTRA_TRAIN_ARGS"
 
 torchrun --standalone --nproc_per_node=4 train_plus.py \
   --device 0,1,2,3 \
-  --fresh-start \
   --log-dir runs \
   --exp_cfg_path configs/sam2act_plus.yaml \
   --mvt_cfg_path mvt/configs/sam2act_plus.yaml \

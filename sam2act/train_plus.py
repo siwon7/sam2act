@@ -299,7 +299,7 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
     )
 
     t_start = time.time()
-    get_dataset_func = lambda: get_dataset_temporal(
+    get_dataset_func = lambda refresh_replay: get_dataset_temporal(
         tasks,
         BATCH_SIZE_TRAIN,
         None,
@@ -310,7 +310,7 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
         DATA_FOLDER_MEM,
         NUM_TRAIN,
         None,
-        cmd_args.refresh_replay,
+        refresh_replay,
         device,
         num_workers=exp_cfg.num_workers,
         only_train=True,
@@ -318,7 +318,14 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
         num_maskmem=mvt_cfg.num_maskmem,
         rank=rank,
     )
-    train_dataset, _ = get_dataset_func()
+    if ddp:
+        if rank == 0:
+            train_dataset, _ = get_dataset_func(cmd_args.refresh_replay)
+        dist.barrier()
+        if rank != 0:
+            train_dataset, _ = get_dataset_func(False)
+    else:
+        train_dataset, _ = get_dataset_func(cmd_args.refresh_replay)
     t_end = time.time()
 
     if rank == 0:
