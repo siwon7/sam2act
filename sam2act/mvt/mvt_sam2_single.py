@@ -11,6 +11,10 @@ from torch import nn
 from einops import rearrange, repeat
 
 import sam2act.mvt.utils as mvt_utils
+from sam2act.utils.memory_edge_bias import (
+    build_memory_edge_bias,
+    summarize_attn_over_memory_steps,
+)
 from sam2act.mvt.attn import (
     Conv2DBlock,
     Conv2DUpsampleBlock,
@@ -99,6 +103,13 @@ class MVT_SAM2_Single(nn.Module):
         sam2_ckpt,
         use_memory,
         num_maskmem,
+        memory_edge_bias_enabled,
+        memory_edge_temporal_scale,
+        memory_edge_revisit_scale,
+        memory_edge_transition_scale,
+        memory_edge_grip_scale,
+        memory_edge_revisit_sigma,
+        memory_edge_transition_sigma,
         renderer_device="cuda:0",
         renderer=None,
         no_feat=False,
@@ -201,10 +212,19 @@ class MVT_SAM2_Single(nn.Module):
         self.rank = rank
         self.use_memory = use_memory
         self.num_maskmem = num_maskmem
+        self.memory_edge_bias_enabled = memory_edge_bias_enabled
+        self.memory_edge_temporal_scale = memory_edge_temporal_scale
+        self.memory_edge_revisit_scale = memory_edge_revisit_scale
+        self.memory_edge_transition_scale = memory_edge_transition_scale
+        self.memory_edge_grip_scale = memory_edge_grip_scale
+        self.memory_edge_revisit_sigma = memory_edge_revisit_sigma
+        self.memory_edge_transition_sigma = memory_edge_transition_sigma
 
         self.curr_obs_idx = 0
 
         self.memory_bank_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
+        self.prev_ref_obs_idx_multiview = [None for _ in self.memory_bank_multiview]
+        self.prev_edge_query_pos = None
 
 
         if self.cvx_up:
@@ -530,8 +550,10 @@ class MVT_SAM2_Single(nn.Module):
     def reset_memory_bank(self):
         self.memory_bank_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
         self.curr_obs_idx = 0
+        self.prev_ref_obs_idx_multiview = [None for _ in self.memory_bank_multiview]
+        self.prev_edge_query_pos = None
 
-    def sam2_forward_with_memory(self, net, idx, num_views, feat_sizes):
+    def sam2_forward_with_memory(self, net, idx, num_views, feat_sizes, query_pos3d=None, query_grip=None):
         GPUdevice = self.rank
         
         image_embed_list = []
@@ -553,28 +575,43 @@ class MVT_SAM2_Single(nn.Module):
                 num_mem = min(len(memory_bank_list), net.num_maskmem)
 
                 for t_pos in range(1, num_mem + 1):
-                    # here t_pos is "how many act away from the current act"
-                    t_pos_and_prevs.append((t_pos, memory_bank_list.get(self.curr_obs_idx - t_pos))) 
+                    prev_entry = memory_bank_list.get(self.curr_obs_idx - t_pos)
+                    if prev_entry is not None:
+                        t_pos_and_prevs.append((t_pos, prev_entry))
 
                 to_cat_memory = []
                 to_cat_memory_pos_embed = []
+                memory_entries = []
 
                 for t_pos, prev in t_pos_and_prevs:
                     # "maskmem_features" might have been offloaded to CPU in demo use cases,
                     # so we load it back to GPU (it's a no-op if it's already on GPU).
-                    feats = prev[0].cuda()
+                    feats = prev["memory"].cuda()
                     to_cat_memory.append(feats)
                     # Spatial positional encoding (it might have been offloaded to CPU in eval)
-                    maskmem_enc = prev[1].cuda()
+                    maskmem_enc = prev["memory_pos"].cuda()
                     # Temporal positional encoding
                     # the smaller the index, the closer in time
                     maskmem_enc = (
                         maskmem_enc + net.maskmem_tpos_enc[t_pos - 1]
                     )
                     to_cat_memory_pos_embed.append(maskmem_enc)
+                    memory_entries.append(prev)
 
                 memory_fused = torch.cat(to_cat_memory, dim=0)
                 memory_pos_fused = torch.cat(to_cat_memory_pos_embed, dim=0)
+                memory_edge_bias, token_ranges, obs_indices = build_memory_edge_bias(
+                    memory_entries=memory_entries,
+                    query_pos=query_pos3d,
+                    query_grip=query_grip,
+                    prev_ref_obs_idx=self.prev_ref_obs_idx_multiview[view_idx],
+                    temporal_scale=self.memory_edge_temporal_scale if self.memory_edge_bias_enabled else 0.0,
+                    revisit_scale=self.memory_edge_revisit_scale if self.memory_edge_bias_enabled else 0.0,
+                    transition_scale=self.memory_edge_transition_scale if self.memory_edge_bias_enabled else 0.0,
+                    grip_scale=self.memory_edge_grip_scale if self.memory_edge_bias_enabled else 0.0,
+                    revisit_sigma=self.memory_edge_revisit_sigma,
+                    transition_sigma=self.memory_edge_transition_sigma,
+                )
                 
                 '''memory attention'''
 
@@ -584,8 +621,18 @@ class MVT_SAM2_Single(nn.Module):
                     curr_pos=[vision_pos_embeds[-1]],
                     memory=memory_fused,
                     memory_pos=memory_pos_fused,
-                    num_obj_ptr_tokens=0
+                    num_obj_ptr_tokens=0,
+                    memory_edge_bias=memory_edge_bias,
                 )
+
+                if self.memory_edge_bias_enabled:
+                    step_attn = summarize_attn_over_memory_steps(
+                        getattr(net.memory_attention, "last_cross_attn_weights", None),
+                        token_ranges,
+                    )
+                    if step_attn is not None and step_attn.numel() > 0:
+                        top_step = int(step_attn.argmax(dim=-1).item())
+                        self.prev_ref_obs_idx_multiview[view_idx] = obs_indices[top_step]
 
             else:
                 pix_feat_with_mem = vision_feats[-1] + torch.nn.Parameter(torch.zeros(1, 1, 128)).to(device="cuda")
@@ -602,7 +649,7 @@ class MVT_SAM2_Single(nn.Module):
 
         return final_image_embeds
 
-    def sam2_add_new_memory(self, net, hm, idx, num_views, feat_sizes):
+    def sam2_add_new_memory(self, net, hm, idx, num_views, feat_sizes, query_pos3d=None, query_grip=None):
         GPUdevice = self.rank
 
         for view_idx in range(num_views):
@@ -644,7 +691,13 @@ class MVT_SAM2_Single(nn.Module):
 
             memory_bank_list = self.memory_bank_multiview[view_idx]
 
-            memory_bank_list[self.curr_obs_idx] = [memory, memory_pos]
+            memory_bank_list[self.curr_obs_idx] = {
+                "memory": memory,
+                "memory_pos": memory_pos,
+                "query_pos": query_pos3d.detach().to(device=GPUdevice) if query_pos3d is not None else None,
+                "grip": query_grip.detach().view(1, -1).to(device=GPUdevice) if query_grip is not None else None,
+                "obs_idx": int(self.curr_obs_idx),
+            }
 
     def forward(
         self,
@@ -653,6 +706,7 @@ class MVT_SAM2_Single(nn.Module):
         lang_emb=None,
         wpt_local=None,
         rot_x_y=None,
+        action_gripper_pose=None,
         **kwargs,
     ):
         """
@@ -882,7 +936,16 @@ class MVT_SAM2_Single(nn.Module):
                     for obs_idx in range(num_obs):
 
                         idx = num_obs * seq_idx + obs_idx
-                        x_i = self.sam2_forward_with_memory(self.sam2, idx, num_img, feat_sizes)
+                        curr_query_pos = wpt_local[idx : idx + 1].detach() if wpt_local is not None else None
+                        curr_query_grip = proprio[idx : idx + 1, 2:3].detach() if proprio is not None else None
+                        x_i = self.sam2_forward_with_memory(
+                            self.sam2,
+                            idx,
+                            num_img,
+                            feat_sizes,
+                            query_pos3d=curr_query_pos,
+                            query_grip=curr_query_grip,
+                        )
 
                         x_.append(x_i)
 
@@ -915,7 +978,15 @@ class MVT_SAM2_Single(nn.Module):
                         trans_.append(trans)
 
                         if self.use_memory:
-                            self.sam2_add_new_memory(self.sam2, trans.view(bs, num_img, 1, 1, h, w), idx, num_img, feat_sizes)
+                            self.sam2_add_new_memory(
+                                self.sam2,
+                                trans.view(bs, num_img, 1, 1, h, w),
+                                idx,
+                                num_img,
+                                feat_sizes,
+                                query_pos3d=curr_query_pos,
+                                query_grip=curr_query_grip,
+                            )
                             self.curr_obs_idx += 1
 
                 x = torch.cat(x_, dim=0)
@@ -929,7 +1000,15 @@ class MVT_SAM2_Single(nn.Module):
 
             else:
                 with torch.cuda.amp.autocast(enabled=True):
-                    x = self.sam2_forward_with_memory(self.sam2, 0, num_img, feat_sizes)
+                    curr_query_grip = proprio[:, 2:3].detach() if proprio is not None else None
+                    x = self.sam2_forward_with_memory(
+                        self.sam2,
+                        0,
+                        num_img,
+                        feat_sizes,
+                        query_pos3d=self.prev_edge_query_pos,
+                        query_grip=curr_query_grip,
+                    )
                 if self.cvx_up:
                     with torch.cuda.amp.autocast(enabled=False):
                         conv1, ln1, act1, conv2, ln2, act2, up, conv3 = self.up0
@@ -956,8 +1035,21 @@ class MVT_SAM2_Single(nn.Module):
                     trans = self.trans_decoder(u).view(bs, self.num_img, 1, h, w)
 
                 if self.use_memory:
+                    curr_pred_wpt_local = self.get_wpt(
+                        out={"trans": trans.clone().detach()},
+                        dyn_cam_info=None,
+                    ).detach()
                     with torch.cuda.amp.autocast(enabled=True):
-                        self.sam2_add_new_memory(self.sam2, trans.view(bs, num_img, 1, 1, h, w), 0, num_img, feat_sizes)
+                        self.sam2_add_new_memory(
+                            self.sam2,
+                            trans.view(bs, num_img, 1, 1, h, w),
+                            0,
+                            num_img,
+                            feat_sizes,
+                            query_pos3d=curr_pred_wpt_local,
+                            query_grip=curr_query_grip,
+                        )
+                    self.prev_edge_query_pos = curr_pred_wpt_local
                     self.curr_obs_idx += 1
                 
         if not self.no_feat:

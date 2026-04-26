@@ -93,6 +93,13 @@ class MVT_SAM2(nn.Module):
         sam2_ckpt,
         use_memory,
         num_maskmem,
+        memory_edge_bias_enabled,
+        memory_edge_temporal_scale,
+        memory_edge_revisit_scale,
+        memory_edge_transition_scale,
+        memory_edge_grip_scale,
+        memory_edge_revisit_sigma,
+        memory_edge_transition_sigma,
         renderer_device="cuda:0",
     ):
         """MultiView Transfomer
@@ -169,6 +176,13 @@ class MVT_SAM2(nn.Module):
         self.sam2_ckpt = sam2_ckpt
         self.use_memory = use_memory
         self.num_maskmem = num_maskmem
+        self.memory_edge_bias_enabled = memory_edge_bias_enabled
+        self.memory_edge_temporal_scale = memory_edge_temporal_scale
+        self.memory_edge_revisit_scale = memory_edge_revisit_scale
+        self.memory_edge_transition_scale = memory_edge_transition_scale
+        self.memory_edge_grip_scale = memory_edge_grip_scale
+        self.memory_edge_revisit_sigma = memory_edge_revisit_sigma
+        self.memory_edge_transition_sigma = memory_edge_transition_sigma
 
         if self.ifSAM2:
             # sam2 = build_sam2_custom(self.sam2_config, self.sam2_ckpt, device="cuda", image_size=self.img_size if not self.resize_rgb else 256) #, num_maskmem=self.num_maskmem)

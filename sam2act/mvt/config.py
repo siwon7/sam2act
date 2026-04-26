@@ -54,6 +54,13 @@ _C.ifsep = False
 _C.resize_rgb = True
 _C.use_memory = False
 _C.num_maskmem = 7
+_C.memory_edge_bias_enabled = False
+_C.memory_edge_temporal_scale = 0.0
+_C.memory_edge_revisit_scale = 0.0
+_C.memory_edge_transition_scale = 0.0
+_C.memory_edge_grip_scale = 0.0
+_C.memory_edge_revisit_sigma = 0.08
+_C.memory_edge_transition_sigma = 2.0
 
 _C.sam2_config = '/configs/sam2.1/sam2.1_hiera_b+'
 _C.sam2_ckpt = './mvt/sam2_train/checkpoints/sam2.1_hiera_base_plus.pt'
