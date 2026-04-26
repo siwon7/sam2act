@@ -39,17 +39,25 @@ def batched_index_select(inp, dim, index):
 
 def get_cube_R_T(
     with_scale=False,
+    three_views=False,
 ):
     """
     Returns camera rotations and translations to render point cloud around a cube
     """
-    elev_azim = {
-        "top": (0, 0),
-        "front": (90, 0),
-        "back": (270, 0),
-        "left": (0, 90),
-        "right": (0, 270),
-    }
+    if three_views:
+        elev_azim = {
+            "top": (0, 0),
+            "right": (0, 270),
+            "front": (90, 0),
+        }
+    else:
+        elev_azim = {
+            "top": (0, 0),
+            "front": (90, 0),
+            "back": (270, 0),
+            "left": (0, 90),
+            "right": (0, 270),
+        }
 
     elev = torch.tensor([elev for _, (elev, azim) in elev_azim.items()])
     azim = torch.tensor([azim for _, (elev, azim) in elev_azim.items()])
@@ -336,7 +344,7 @@ class BoxRenderer:
         self.points_per_pixel = points_per_pixel
         self.compositor = compositor
         self.with_depth = with_depth
-        assert three_views == False, "Not Supported"
+        self.three_views = three_views
 
         self.init()
 
@@ -377,6 +385,7 @@ class BoxRenderer:
         if self._fix_cam is None:
             R, T, scale = get_cube_R_T(
                 with_scale=True,
+                three_views=self.three_views,
             )
             assert len(R.shape) == len(T.shape) + 1 == 3
 
@@ -670,5 +679,6 @@ class BoxRenderer:
         self._pts = None
         self._fix_pts_cam = None
         self._fix_pts_cam_wei = None
-        with torch.cuda.device(self.device):
-            torch.cuda.empty_cache()
+        if str(self.device).startswith("cuda"):
+            with torch.cuda.device(self.device):
+                torch.cuda.empty_cache()
