@@ -94,6 +94,13 @@ class MVT_SAM2(nn.Module):
         use_memory,
         num_maskmem,
         graph_node_classes,
+        phase_graph_num_classes,
+        role_graph_enabled,
+        role_graph_num_classes,
+        role_graph_hidden_dim,
+        role_graph_bias_scale,
+        anchor_use_bias_scale,
+        role_contrastive_dim,
         memory_gate_enabled=False,
         memory_gate_mode="none",
         memory_gate_use_text=True,
@@ -232,7 +239,17 @@ class MVT_SAM2(nn.Module):
 
             if self.use_memory:
                 for name, param in self.mvt1.named_parameters():
-                    if "sam" not in name and "up0" not in name:
+                    if not any(
+                        token in name
+                        for token in (
+                            "sam",
+                            "up0",
+                            "role_",
+                            "phase_",
+                            "anchor_use_",
+                            "graph_node",
+                        )
+                    ):
                         param.requires_grad = False
 
         if self.stage_two:
@@ -245,7 +262,16 @@ class MVT_SAM2(nn.Module):
                 
                 if self.use_memory:
                     for name, param in self.mvt2.named_parameters():
-                        if "sam" not in name:
+                        if not any(
+                            token in name
+                            for token in (
+                                "sam",
+                                "role_",
+                                "phase_",
+                                "anchor_use_",
+                                "graph_node",
+                            )
+                        ):
                             param.requires_grad = False
 
     def get_pt_loc_on_img(self, pt, mvt1_or_mvt2, dyn_cam_info, out=None):

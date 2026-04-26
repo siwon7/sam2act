@@ -252,7 +252,9 @@ class Attention(nn.Module):
         x = x.transpose(1, 2)
         return x.reshape(b, n_tokens, n_heads * c_per_head)  # B x N_tokens x C
 
-    def forward(self, q: Tensor, k: Tensor, v: Tensor) -> Tensor:
+    def forward(
+        self, q: Tensor, k: Tensor, v: Tensor, attn_bias: Tensor = None
+    ) -> Tensor:
         # Input projections
         q = self.q_proj(q)
         k = self.k_proj(k)
@@ -267,7 +269,9 @@ class Attention(nn.Module):
         # Attention
         try:
             with sdp_kernel_context(dropout_p):
-                out = F.scaled_dot_product_attention(q, k, v, dropout_p=dropout_p)
+                out = F.scaled_dot_product_attention(
+                    q, k, v, attn_mask=attn_bias, dropout_p=dropout_p
+                )
         except Exception as e:
             # Fall back to all kernels if the Flash attention kernel fails
             warnings.warn(
@@ -278,7 +282,9 @@ class Attention(nn.Module):
             )
             global ALLOW_ALL_KERNELS
             ALLOW_ALL_KERNELS = True
-            out = F.scaled_dot_product_attention(q, k, v, dropout_p=dropout_p)
+            out = F.scaled_dot_product_attention(
+                q, k, v, attn_mask=attn_bias, dropout_p=dropout_p
+            )
 
         out = self._recombine_heads(out)
         out = self.out_proj(out)
@@ -309,7 +315,12 @@ class RoPEAttention(Attention):
         self.rope_k_repeat = rope_k_repeat
 
     def forward(
-        self, q: Tensor, k: Tensor, v: Tensor, num_k_exclude_rope: int = 0
+        self,
+        q: Tensor,
+        k: Tensor,
+        v: Tensor,
+        num_k_exclude_rope: int = 0,
+        attn_bias: Tensor = None,
     ) -> Tensor:
         # Input projections
         q = self.q_proj(q)
@@ -341,7 +352,9 @@ class RoPEAttention(Attention):
         # Attention
         try:
             with sdp_kernel_context(dropout_p):
-                out = F.scaled_dot_product_attention(q, k, v, dropout_p=dropout_p)
+                out = F.scaled_dot_product_attention(
+                    q, k, v, attn_mask=attn_bias, dropout_p=dropout_p
+                )
         except Exception as e:
             # Fall back to all kernels if the Flash attention kernel fails
             warnings.warn(
@@ -352,7 +365,9 @@ class RoPEAttention(Attention):
             )
             global ALLOW_ALL_KERNELS
             ALLOW_ALL_KERNELS = True
-            out = F.scaled_dot_product_attention(q, k, v, dropout_p=dropout_p)
+            out = F.scaled_dot_product_attention(
+                q, k, v, attn_mask=attn_bias, dropout_p=dropout_p
+            )
 
         out = self._recombine_heads(out)
         out = self.out_proj(out)

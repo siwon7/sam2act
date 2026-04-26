@@ -9,6 +9,7 @@ import torch
 import torchvision
 import numpy as np
 import torch.nn as nn
+import torch.nn.functional as F
 import bitsandbytes as bnb
 
 from scipy.spatial.transform import Rotation
@@ -330,6 +331,16 @@ class SAM2Act_Agent:
         phase_aux_loss_weight: float = 0.0,
         phase_aux_num_classes: int = 0,
         phase_aux_label_key: str = "phase_label",
+        role_graph_loss_weight: float = 0.0,
+        role_graph_label_key: str = "role_label",
+        role_ref_loss_weight: float = 0.0,
+        role_ref_valid_key: str = "role_ref_valid",
+        role_ref_label_key: str = "role_ref_mask",
+        anchor_use_loss_weight: float = 0.0,
+        anchor_use_label_key: str = "anchor_use_label",
+        role_contrastive_loss_weight: float = 0.0,
+        role_contrastive_label_key: str = "role_label",
+        role_contrastive_temperature: float = 0.1,
     ):
         """
         :param gt_hm_sigma: the std of the groundtruth hm, currently for for
@@ -378,6 +389,7 @@ class SAM2Act_Agent:
         self.rot_x_y_aug = rot_x_y_aug
 
         self._cross_entropy_loss = nn.CrossEntropyLoss(reduction="none")
+        self._bce_logits_loss = nn.BCEWithLogitsLoss(reduction="none")
         if isinstance(self._network, DistributedDataParallel):
             self._net_mod = self._network.module
         else:
@@ -397,6 +409,46 @@ class SAM2Act_Agent:
         self.phase_aux_loss_weight = phase_aux_loss_weight
         self.phase_aux_num_classes = phase_aux_num_classes
         self.phase_aux_label_key = phase_aux_label_key
+        self.role_graph_loss_weight = role_graph_loss_weight
+        self.role_graph_label_key = role_graph_label_key
+        self.role_ref_loss_weight = role_ref_loss_weight
+        self.role_ref_valid_key = role_ref_valid_key
+        self.role_ref_label_key = role_ref_label_key
+        self.anchor_use_loss_weight = anchor_use_loss_weight
+        self.anchor_use_label_key = anchor_use_label_key
+        self.role_contrastive_loss_weight = role_contrastive_loss_weight
+        self.role_contrastive_label_key = role_contrastive_label_key
+        self.role_contrastive_temperature = role_contrastive_temperature
+
+    def _supervised_contrastive_loss(self, embeddings, labels):
+        if embeddings is None or labels is None:
+            return torch.tensor(0.0, device=self._device)
+
+        embeddings = embeddings.view(embeddings.shape[0], -1)
+        labels = labels.view(-1).long().to(embeddings.device)
+        valid_mask = labels >= 0
+        if valid_mask.sum() < 2:
+            return embeddings.new_tensor(0.0)
+
+        embeddings = embeddings[valid_mask].float()
+        labels = labels[valid_mask]
+        embeddings = F.normalize(embeddings, dim=-1)
+        logits = embeddings @ embeddings.t()
+        logits = logits / max(self.role_contrastive_temperature, 1e-6)
+        eye_mask = torch.eye(logits.shape[0], device=logits.device, dtype=torch.bool)
+        logits = logits.masked_fill(eye_mask, -1e4)
+
+        positive_mask = labels.unsqueeze(0) == labels.unsqueeze(1)
+        positive_mask = positive_mask & (~eye_mask)
+        positive_rows = positive_mask.any(dim=1)
+        if not positive_rows.any():
+            return embeddings.new_tensor(0.0)
+
+        log_probs = logits - torch.logsumexp(logits, dim=1, keepdim=True)
+        positive_log_probs = (log_probs * positive_mask.float()).sum(dim=1)
+        positive_counts = positive_mask.float().sum(dim=1).clamp_min(1.0)
+        loss = -(positive_log_probs / positive_counts)[positive_rows]
+        return loss.mean()
 
     def build(self, training: bool, device: torch.device = None):
         self._training = training
@@ -778,6 +830,7 @@ class SAM2Act_Agent:
                 img_aug=img_aug,
                 wpt_local=wpt_local if self._network.training else None,
                 rot_x_y=rot_x_y if self.rot_ver == 1 else None,
+                role_label_seq=replay_sample.get(self.role_graph_label_key, None),
                 # hm_gt=hm_gt,
             )
 
@@ -794,6 +847,13 @@ class SAM2Act_Agent:
             graph_node_acc = None
             phase_aux_loss = torch.tensor(0.0, device=self._device)
             phase_aux_acc = None
+            role_graph_loss = torch.tensor(0.0, device=self._device)
+            role_graph_acc = None
+            role_ref_loss = torch.tensor(0.0, device=self._device)
+            role_ref_top3_acc = None
+            anchor_use_loss = torch.tensor(0.0, device=self._device)
+            anchor_use_acc = None
+            role_contrastive_loss = torch.tensor(0.0, device=self._device)
             if (
                 self.graph_node_loss_weight > 0.0
                 and "graph_node_logits" in pred_out
@@ -819,10 +879,10 @@ class SAM2Act_Agent:
             if (
                 self.phase_aux_loss_weight > 0.0
                 and self.phase_aux_num_classes > 0
-                and "graph_node_logits" in pred_out
+                and "phase_graph_logits" in pred_out
                 and self.phase_aux_label_key in replay_sample
             ):
-                phase_aux_logits = pred_out["graph_node_logits"].view(bs, -1)
+                phase_aux_logits = pred_out["phase_graph_logits"].view(bs, -1)
                 phase_aux_target = replay_sample[self.phase_aux_label_key]
                 if phase_aux_target.ndim > 1:
                     phase_aux_target = phase_aux_target[:, -1]
@@ -839,6 +899,80 @@ class SAM2Act_Agent:
                         phase_aux_logits[valid_mask].argmax(dim=-1)
                         == phase_aux_target[valid_mask]
                     ).float().mean()
+            if (
+                self.role_graph_loss_weight > 0.0
+                and "role_graph_logits" in pred_out
+                and self.role_graph_label_key in replay_sample
+            ):
+                role_graph_logits = pred_out["role_graph_logits"].view(bs, -1)
+                role_graph_target = replay_sample[self.role_graph_label_key]
+                if role_graph_target.ndim > 1:
+                    role_graph_target = role_graph_target[:, -1]
+                role_graph_target = role_graph_target.long().to(role_graph_logits.device)
+                valid_mask = (role_graph_target >= 0) & (
+                    role_graph_target < role_graph_logits.shape[-1]
+                )
+                if valid_mask.any():
+                    role_graph_loss = self._cross_entropy_loss(
+                        role_graph_logits[valid_mask], role_graph_target[valid_mask]
+                    ).mean()
+                    role_graph_acc = (
+                        role_graph_logits[valid_mask].argmax(dim=-1)
+                        == role_graph_target[valid_mask]
+                    ).float().mean()
+            if (
+                self.role_ref_loss_weight > 0.0
+                and "role_ref_logits" in pred_out
+                and self.role_ref_label_key in replay_sample
+                and self.role_ref_valid_key in replay_sample
+            ):
+                role_ref_logits = pred_out["role_ref_logits"].view(bs, -1)
+                role_ref_target = replay_sample[self.role_ref_label_key]
+                role_ref_valid = replay_sample[self.role_ref_valid_key]
+                if role_ref_target.ndim > 2:
+                    role_ref_target = role_ref_target[:, -1, :]
+                role_ref_target = role_ref_target.float().to(role_ref_logits.device)
+                if role_ref_valid.ndim > 1:
+                    role_ref_valid = role_ref_valid[:, -1]
+                role_ref_valid = role_ref_valid.float().to(role_ref_logits.device)
+                valid_mask = role_ref_valid > 0.5
+                if valid_mask.any():
+                    role_ref_loss = self._bce_logits_loss(
+                        role_ref_logits[valid_mask], role_ref_target[valid_mask]
+                    ).mean()
+                    topk = min(3, role_ref_logits.shape[-1])
+                    topk_idx = role_ref_logits[valid_mask].topk(topk, dim=-1).indices
+                    topk_hits = role_ref_target[valid_mask].bool().gather(1, topk_idx).any(dim=-1)
+                    role_ref_top3_acc = topk_hits.float().mean()
+            if (
+                self.anchor_use_loss_weight > 0.0
+                and "anchor_use_logits" in pred_out
+                and self.anchor_use_label_key in replay_sample
+            ):
+                anchor_use_logits = pred_out["anchor_use_logits"].view(bs)
+                anchor_use_target = replay_sample[self.anchor_use_label_key]
+                if anchor_use_target.ndim > 1:
+                    anchor_use_target = anchor_use_target[:, -1]
+                anchor_use_target = anchor_use_target.float().to(anchor_use_logits.device)
+                anchor_use_loss = self._bce_logits_loss(
+                    anchor_use_logits, anchor_use_target
+                ).mean()
+                anchor_use_acc = (
+                    (torch.sigmoid(anchor_use_logits) > 0.5)
+                    == (anchor_use_target > 0.5)
+                ).float().mean()
+            if (
+                self.role_contrastive_loss_weight > 0.0
+                and "role_contrast_embeddings" in pred_out
+                and self.role_contrastive_label_key in replay_sample
+            ):
+                contrast_target = replay_sample[self.role_contrastive_label_key]
+                if contrast_target.ndim > 1:
+                    contrast_target = contrast_target[:, -1]
+                role_contrastive_loss = self._supervised_contrastive_loss(
+                    pred_out["role_contrast_embeddings"],
+                    contrast_target,
+                )
 
         loss_log = {}
         if backprop:
@@ -901,6 +1035,18 @@ class SAM2Act_Agent:
                     total_loss = total_loss + (
                         self.phase_aux_loss_weight * phase_aux_loss
                     )
+                    total_loss = total_loss + (
+                        self.role_graph_loss_weight * role_graph_loss
+                    )
+                    total_loss = total_loss + (
+                        self.role_ref_loss_weight * role_ref_loss
+                    )
+                    total_loss = total_loss + (
+                        self.anchor_use_loss_weight * anchor_use_loss
+                    )
+                    total_loss = total_loss + (
+                        self.role_contrastive_loss_weight * role_contrastive_loss
+                    )
 
 
             self._optimizer.zero_grad(set_to_none=True)
@@ -932,6 +1078,27 @@ class SAM2Act_Agent:
                 else None,
                 "phase_aux_acc": phase_aux_acc.item()
                 if phase_aux_acc is not None
+                else None,
+                "role_graph_loss": role_graph_loss.item()
+                if self.role_graph_loss_weight > 0.0
+                else None,
+                "role_graph_acc": role_graph_acc.item()
+                if role_graph_acc is not None
+                else None,
+                "role_ref_loss": role_ref_loss.item()
+                if self.role_ref_loss_weight > 0.0
+                else None,
+                "role_ref_top3_acc": role_ref_top3_acc.item()
+                if role_ref_top3_acc is not None
+                else None,
+                "anchor_use_loss": anchor_use_loss.item()
+                if self.anchor_use_loss_weight > 0.0
+                else None,
+                "anchor_use_acc": anchor_use_acc.item()
+                if anchor_use_acc is not None
+                else None,
+                "role_contrastive_loss": role_contrastive_loss.item()
+                if self.role_contrastive_loss_weight > 0.0
                 else None,
                 "lr": self._optimizer.param_groups[0]["lr"],
             }

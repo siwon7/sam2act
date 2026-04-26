@@ -46,6 +46,16 @@ _C.peract.graph_node_loss_weight = 0.0
 _C.peract.phase_aux_loss_weight = 0.0
 _C.peract.phase_aux_num_classes = 0
 _C.peract.phase_aux_label_key = "phase_label"
+_C.peract.role_graph_loss_weight = 0.0
+_C.peract.role_graph_label_key = "role_label"
+_C.peract.role_ref_loss_weight = 0.0
+_C.peract.role_ref_valid_key = "role_ref_valid"
+_C.peract.role_ref_label_key = "role_ref_mask"
+_C.peract.anchor_use_loss_weight = 0.0
+_C.peract.anchor_use_label_key = "anchor_use_label"
+_C.peract.role_contrastive_loss_weight = 0.0
+_C.peract.role_contrastive_label_key = "role_label"
+_C.peract.role_contrastive_temperature = 0.1
 
 # arguments present in only rvt and not peract
 _C.rvt = CN()

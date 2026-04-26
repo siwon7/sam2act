@@ -2,81 +2,79 @@
 
 ## Repo
 
-- worktree: `/home/cv25/siwon/sam2act_multitask_txt_memory`
-- branch: `exp/persistent-anchor-memory`
+- worktree: `/home/cv25/siwon/sam2act_role_graph_memory`
+- branch: `exp/role-graph-phase-contrastive`
 
 ## What Is In This Branch
 
-- shared MemoryBench `phase_label` replay field
-- stage2 `phase_aux_loss`
-- text-gated memory scaffold
+- grouped `put_block_back` role graph labels
+- MemoryBench `phase_label`
 - persistent anchor memory bank
-- 4-GPU launcher for multitask stage2 experiments
+- additive graph-biased memory attention
+- role graph / role ref / anchor use / contrastive auxiliary losses
 
-## Basic Launcher
+Main note:
 
-Script:
+- `/home/cv25/siwon/sam2act_role_graph_memory/notes/role_graph_phase_contrastive_design.md`
 
-- `/home/cv25/siwon/sam2act_multitask_txt_memory/scripts/run_memorybench_multitask_stage2_4gpu.sh`
+Smoke note:
 
-Usage:
+- `/home/cv25/siwon/sam2act_role_graph_memory/notes/role_graph_smoke_20260426.md`
 
-```bash
-cd /home/cv25/siwon/sam2act_multitask_txt_memory
+## Fastest Local Smoke Script
 
-ENABLE_COARSE_PHASE_AUX=1 \
-ENABLE_PERSISTENT_ANCHOR=1 \
-COARSE_PHASE_EXP_CFG_OPTS="peract.phase_aux_loss_weight 0.5 peract.phase_aux_num_classes 4" \
-AUTO_EVAL_EPISODES=5 \
-./scripts/run_memorybench_multitask_stage2_4gpu.sh \
-  "(put_block_back,reopen_drawer,rearrange_block)" \
-  /abs/path/to/stage1_run_dir_or_model_last.pth \
-  multitask_phaseaux_anchor_v1
-```
+- `/home/cv25/siwon/sam2act_role_graph_memory/scripts/run_put_block_back_role_graph_smoke.sh`
 
-## Useful Flag Sets
+This script:
 
-### Phase Aux Only
+- links `data_memory`
+- links the SAM2 base checkpoint
+- seeds stage2 from dirty stage1 `model_38`
+- optionally regenerates local `replay_temporal_memory`
+- runs `1` epoch / `10` train iterations
+- runs `1` eval episode
 
-```bash
-ENABLE_COARSE_PHASE_AUX=1
-COARSE_PHASE_EXP_CFG_OPTS="peract.phase_aux_loss_weight 0.5 peract.phase_aux_num_classes 4"
-```
+## Smoke Result So Far
 
-### Persistent Anchor Only
+The path is now live end-to-end, but not yet tuned:
 
-```bash
-ENABLE_PERSISTENT_ANCHOR=1
-PERSISTENT_ANCHOR_MVT_CFG_OPTS="persistent_anchor_enabled True persistent_anchor_max_steps 2"
-```
+- training completes
+- eval completes
+- latest smoke score: `0.0`
+- failure mode: timeout at length `25`, not immediate step-1 crash
 
-### Text Gate
+That means:
 
-```bash
-ENABLE_TEXT_TASK_GATE=1
-TEXT_TASK_GATE_MVT_CFG_OPTS="memory_gate_enabled True memory_gate_mode both memory_gate_use_text True"
-```
+- implementation bugs in the role/phase/ref/anchor/contrastive path are mostly
+  cleared
+- the next step on cv11 should be weight tuning or longer training, not another
+  rewrite from scratch
 
-### Put Block Back–style Long Window
+## Suggested First cv11 Runs
 
-```bash
-ENABLE_MEM11=1
-BS=12
-NUM_MASKMEM=11
-```
+### A. Reproduce the local smoke with more compute stability
 
-## Suggested Order
+Use the smoke script as-is first, then increase:
 
-1. multitask baseline
-2. phase aux only
-3. persistent anchor only
-4. phase aux + persistent anchor
-5. phase aux + persistent anchor + text gate
+- `epochs`
+- `train_iter`
+- `eval_episodes`
+
+### B. 8-GPU tuning starting from this branch
+
+Recommended first tuning knobs:
+
+- `peract.phase_aux_loss_weight`
+- `peract.role_graph_loss_weight`
+- `peract.role_ref_loss_weight`
+- `peract.anchor_use_loss_weight`
+- `peract.role_contrastive_loss_weight`
+- `mvt.role_graph_bias_scale`
+- `mvt.anchor_use_bias_scale`
 
 ## Notes
 
-- `put_block_back` benefits from `mem11`; multitask runs may need to keep
-  `NUM_MASKMEM=11` only if the temporal sampler and task mix can support it.
-- persistent anchors default to the first 2 sequence steps and are kept outside
-  the FIFO memory window.
-- this branch is for experimentation, not the clean upstream baseline.
+- this branch is experimental and intentionally separate from `sam2act_upstream_main`
+- for `put_block_back`, the current implementation assumes the grouped 6-role
+  mapping documented in `memorybench_role_graph.py`
+- if replay schema changes again, regenerate local replay with `--refresh_replay`

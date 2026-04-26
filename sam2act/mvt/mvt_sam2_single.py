@@ -100,6 +100,13 @@ class MVT_SAM2_Single(nn.Module):
         use_memory,
         num_maskmem,
         graph_node_classes,
+        phase_graph_num_classes,
+        role_graph_enabled,
+        role_graph_num_classes,
+        role_graph_hidden_dim,
+        role_graph_bias_scale,
+        anchor_use_bias_scale,
+        role_contrastive_dim,
         memory_gate_enabled=False,
         memory_gate_mode="none",
         memory_gate_use_text=True,
@@ -212,6 +219,13 @@ class MVT_SAM2_Single(nn.Module):
         self.use_memory = use_memory
         self.num_maskmem = num_maskmem
         self.graph_node_classes = graph_node_classes
+        self.phase_graph_num_classes = phase_graph_num_classes
+        self.role_graph_enabled = role_graph_enabled
+        self.role_graph_num_classes = role_graph_num_classes
+        self.role_graph_hidden_dim = role_graph_hidden_dim
+        self.role_graph_bias_scale = role_graph_bias_scale
+        self.anchor_use_bias_scale = anchor_use_bias_scale
+        self.role_contrastive_dim = role_contrastive_dim
         self.memory_gate_enabled = memory_gate_enabled
         self.memory_gate_mode = memory_gate_mode
         self.memory_gate_use_text = memory_gate_use_text
@@ -224,9 +238,18 @@ class MVT_SAM2_Single(nn.Module):
 
         self.curr_obs_idx = 0
         self.memory_gate_context = None
+        self.latest_eval_role_tag = 0
+        self.role_graph_logits_runtime = []
+        self.phase_graph_logits_runtime = []
+        self.role_ref_logits_runtime = []
+        self.anchor_use_logits_runtime = []
+        self.role_contrast_embeddings_runtime = []
+        self.role_contrast_labels_runtime = []
 
         self.memory_bank_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
         self.anchor_memory_bank_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
+        self.memory_role_tags_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
+        self.anchor_role_tags_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
 
 
         if self.cvx_up:
@@ -401,6 +424,44 @@ class MVT_SAM2_Single(nn.Module):
             )
         else:
             self.register_parameter("persistent_anchor_tpos_enc", None)
+
+        self.role_query_input_dim = self.input_dim_before_seq
+        if self.role_graph_enabled:
+            self.role_query_proj = nn.Sequential(
+                nn.Linear(self.role_query_input_dim, self.role_graph_hidden_dim),
+                act_layer(activation),
+                nn.Linear(self.role_graph_hidden_dim, self.role_graph_hidden_dim),
+            )
+            self.role_graph_head = nn.Linear(
+                self.role_graph_hidden_dim, self.role_graph_num_classes
+            )
+            if self.phase_graph_num_classes > 0:
+                self.phase_head = nn.Linear(
+                    self.role_graph_hidden_dim, self.phase_graph_num_classes
+                )
+            else:
+                self.phase_head = None
+            self.role_ref_head = nn.Linear(
+                self.role_graph_hidden_dim, self.role_graph_num_classes
+            )
+            self.anchor_use_head = nn.Linear(self.role_graph_hidden_dim, 1)
+            self.role_contrast_proj = nn.Linear(
+                self.memory_gate_dim, self.role_contrastive_dim
+            )
+            self.role_query_proj.apply(initialize_weights)
+            self.role_graph_head.apply(initialize_weights)
+            if self.phase_head is not None:
+                self.phase_head.apply(initialize_weights)
+            self.role_ref_head.apply(initialize_weights)
+            self.anchor_use_head.apply(initialize_weights)
+            self.role_contrast_proj.apply(initialize_weights)
+        else:
+            self.role_query_proj = None
+            self.role_graph_head = None
+            self.phase_head = None
+            self.role_ref_head = None
+            self.anchor_use_head = None
+            self.role_contrast_proj = None
 
         get_attn_attn = lambda: PreNorm(
             attn_dim,
@@ -585,21 +646,96 @@ class MVT_SAM2_Single(nn.Module):
         # net._store_images_features(inference_state, imgs, backbone_out, len(imgs), num_views, start_frame_idx)
         _, vision_feats_all, vision_pos_embeds_all, _ = net._prepare_backbone_features(backbone_out)
         return vision_feats_all, vision_pos_embeds_all
+
+    def _reset_role_graph_runtime(self):
+        self.latest_eval_role_tag = 0
+        self.role_graph_logits_runtime = []
+        self.phase_graph_logits_runtime = []
+        self.role_ref_logits_runtime = []
+        self.anchor_use_logits_runtime = []
+        self.role_contrast_embeddings_runtime = []
+        self.role_contrast_labels_runtime = []
+
+    def _build_role_query_outputs(self, vision_feats_per_view):
+        if not self.role_graph_enabled:
+            return None
+
+        pooled_views = []
+        for vision_feat in vision_feats_per_view:
+            pooled_views.append(vision_feat.mean(dim=0).squeeze(0))
+        query_input = torch.stack(pooled_views, dim=0).mean(dim=0, keepdim=True)
+        role_hidden = self.role_query_proj(query_input)
+        role_logits = self.role_graph_head(role_hidden)
+        phase_logits = (
+            self.phase_head(role_hidden) if self.phase_head is not None else None
+        )
+        role_ref_logits = self.role_ref_head(role_hidden)
+        anchor_use_logits = self.anchor_use_head(role_hidden).squeeze(-1)
+        return {
+            "hidden": role_hidden,
+            "role_logits": role_logits,
+            "phase_logits": phase_logits,
+            "role_ref_logits": role_ref_logits,
+            "anchor_use_logits": anchor_use_logits,
+        }
+
+    def _build_memory_attn_bias(
+        self,
+        memory_entries,
+        role_ref_logits,
+        anchor_use_logits,
+        device,
+        num_heads,
+    ):
+        if not self.role_graph_enabled or len(memory_entries) == 0:
+            return None
+
+        role_ref_probs = torch.sigmoid(role_ref_logits).view(-1)
+        anchor_use_prob = torch.sigmoid(anchor_use_logits).view(-1)[0]
+        role_scale = self.role_graph_bias_scale
+        anchor_scale = self.anchor_use_bias_scale
+
+        token_biases = []
+        for entry in memory_entries:
+            entry_len = entry["memory"][0].shape[0]
+            role_tag = int(entry["role_tag"])
+            entry_bias = torch.zeros((), device=device)
+            if 0 <= role_tag < role_ref_probs.shape[0]:
+                entry_bias = entry_bias + role_scale * (2.0 * role_ref_probs[role_tag] - 1.0)
+            if entry["is_anchor"]:
+                entry_bias = entry_bias + anchor_scale * (2.0 * anchor_use_prob - 1.0)
+            token_biases.append(entry_bias.repeat(entry_len))
+
+        if not token_biases:
+            return None
+
+        key_bias = torch.cat(token_biases, dim=0)
+        return key_bias.view(1, 1, 1, -1).expand(1, num_heads, 1, -1)
     
     def reset_memory_bank(self):
         self.memory_bank_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
         self.anchor_memory_bank_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
+        self.memory_role_tags_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
+        self.anchor_role_tags_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
         self.curr_obs_idx = 0
 
     def _get_anchor_memory_entries(self, view_idx, recent_keys):
         if not self.persistent_anchor_enabled:
             return []
         anchor_bank = self.anchor_memory_bank_multiview[view_idx]
+        anchor_role_tags = self.anchor_role_tags_multiview[view_idx]
         anchor_entries = []
         for anchor_idx in sorted(anchor_bank.keys()):
             if anchor_idx in recent_keys:
                 continue
-            anchor_entries.append((anchor_idx, anchor_bank[anchor_idx]))
+            anchor_entries.append(
+                {
+                    "idx": anchor_idx,
+                    "memory": anchor_bank[anchor_idx],
+                    "role_tag": anchor_role_tags.get(anchor_idx, 0),
+                    "is_anchor": True,
+                }
+            )
         return anchor_entries
 
     def _reset_memory_gate_context(self):
@@ -642,93 +778,121 @@ class MVT_SAM2_Single(nn.Module):
 
     def sam2_forward_with_memory(self, net, idx, num_views, feat_sizes):
         GPUdevice = self.rank
-        
         image_embed_list = []
+        vision_feats_per_view = []
+        vision_pos_embeds_per_view = []
 
         for view_idx in range(num_views):
-            
-            '''image embeddings''' 
+            vision_feats_per_view.append(
+                self.vision_feats_all[-1][:, idx * num_views + view_idx, :]
+                .unsqueeze(1)
+                .clone()
+                .cuda()
+            )
+            vision_pos_embeds_per_view.append(
+                self.vision_pos_embeds_all[-1][:, idx * num_views + view_idx, :]
+                .unsqueeze(1)
+                .clone()
+                .cuda()
+            )
 
-            vision_feats = [self.vision_feats_all[-1][:,idx*num_views+view_idx,:].unsqueeze(1).clone().cuda()]
-            
-            vision_pos_embeds= [self.vision_pos_embeds_all[-1][:,idx*num_views+view_idx,:].unsqueeze(1).clone().cuda()]
+        role_query_outputs = self._build_role_query_outputs(vision_feats_per_view)
+        if role_query_outputs is not None:
+            self.role_graph_logits_runtime.append(role_query_outputs["role_logits"])
+            if role_query_outputs["phase_logits"] is not None:
+                self.phase_graph_logits_runtime.append(role_query_outputs["phase_logits"])
+            self.role_ref_logits_runtime.append(role_query_outputs["role_ref_logits"])
+            self.anchor_use_logits_runtime.append(role_query_outputs["anchor_use_logits"])
+            if not self.training:
+                self.latest_eval_role_tag = int(
+                    role_query_outputs["role_logits"].argmax(dim=-1).item()
+                )
 
-            '''retrieve memory from memory bank'''
+        num_heads = net.memory_attention.layers[0].cross_attn_image.num_heads
+
+        for view_idx in range(num_views):
+            vision_feats = [vision_feats_per_view[view_idx]]
+            vision_pos_embeds = [vision_pos_embeds_per_view[view_idx]]
 
             memory_bank_list = self.memory_bank_multiview[view_idx]
-            t_pos_and_prevs = []
+            memory_role_tags = self.memory_role_tags_multiview[view_idx]
+            memory_entries = []
 
             if len(memory_bank_list) > 0:
                 num_mem = min(len(memory_bank_list), net.num_maskmem)
                 recent_keys = set()
 
                 for t_pos in range(1, num_mem + 1):
-                    # here t_pos is "how many act away from the current act"
                     prev_idx = self.curr_obs_idx - t_pos
+                    prev = memory_bank_list.get(prev_idx)
+                    if prev is None:
+                        continue
                     recent_keys.add(prev_idx)
-                    t_pos_and_prevs.append((t_pos, memory_bank_list.get(prev_idx)))
-
-                to_cat_memory = []
-                to_cat_memory_pos_embed = []
+                    memory_entries.append(
+                        {
+                            "idx": prev_idx,
+                            "memory": prev,
+                            "role_tag": memory_role_tags.get(prev_idx, 0),
+                            "is_anchor": False,
+                            "t_pos": t_pos,
+                        }
+                    )
 
                 anchor_entries = self._get_anchor_memory_entries(view_idx, recent_keys)
-
-                for t_pos, prev in t_pos_and_prevs:
-                    # "maskmem_features" might have been offloaded to CPU in demo use cases,
-                    # so we load it back to GPU (it's a no-op if it's already on GPU).
-                    feats = prev[0].cuda()
-                    to_cat_memory.append(feats)
-                    # Spatial positional encoding (it might have been offloaded to CPU in eval)
-                    maskmem_enc = prev[1].cuda()
-                    # Temporal positional encoding
-                    # the smaller the index, the closer in time
-                    maskmem_enc = (
-                        maskmem_enc + net.maskmem_tpos_enc[t_pos - 1]
-                    )
-                    to_cat_memory_pos_embed.append(maskmem_enc)
-
-                anchor_memory = []
-                anchor_memory_pos = []
-                for _, anchor_prev in anchor_entries:
-                    feats = anchor_prev[0].cuda()
-                    anchor_memory.append(feats)
-                    anchor_enc = anchor_prev[1].cuda()
-                    if self.persistent_anchor_tpos_enc is not None:
-                        anchor_enc = anchor_enc + self.persistent_anchor_tpos_enc
-                    anchor_memory_pos.append(anchor_enc)
-
-                if anchor_memory:
+                if anchor_entries:
                     if self.persistent_anchor_prepend:
-                        to_cat_memory = anchor_memory + to_cat_memory
-                        to_cat_memory_pos_embed = anchor_memory_pos + to_cat_memory_pos_embed
+                        memory_entries = anchor_entries + memory_entries
                     else:
-                        to_cat_memory.extend(anchor_memory)
-                        to_cat_memory_pos_embed.extend(anchor_memory_pos)
+                        memory_entries.extend(anchor_entries)
+
+            if memory_entries:
+                to_cat_memory = []
+                to_cat_memory_pos_embed = []
+                for entry in memory_entries:
+                    feats = entry["memory"][0].cuda()
+                    maskmem_enc = entry["memory"][1].cuda()
+                    if entry["is_anchor"]:
+                        if self.persistent_anchor_tpos_enc is not None:
+                            maskmem_enc = maskmem_enc + self.persistent_anchor_tpos_enc
+                    else:
+                        maskmem_enc = maskmem_enc + net.maskmem_tpos_enc[entry["t_pos"] - 1]
+                    to_cat_memory.append(feats)
+                    to_cat_memory_pos_embed.append(maskmem_enc)
 
                 memory_fused = torch.cat(to_cat_memory, dim=0)
                 memory_pos_fused = torch.cat(to_cat_memory_pos_embed, dim=0)
                 memory_gate = self._select_memory_gate(idx, memory_fused.device)
                 if memory_gate is not None and self.memory_gate_mode in ("memory", "both"):
                     memory_fused = memory_fused * memory_gate
-                
-                '''memory attention'''
 
-                # with autocast(dtype=torch.bfloat16):
+                attn_bias = None
+                if role_query_outputs is not None:
+                    attn_bias = self._build_memory_attn_bias(
+                        memory_entries=memory_entries,
+                        role_ref_logits=role_query_outputs["role_ref_logits"],
+                        anchor_use_logits=role_query_outputs["anchor_use_logits"],
+                        device=memory_fused.device,
+                        num_heads=num_heads,
+                    )
+
                 pix_feat_with_mem = net.memory_attention(
                     curr=[vision_feats[-1]],
                     curr_pos=[vision_pos_embeds[-1]],
                     memory=memory_fused,
                     memory_pos=memory_pos_fused,
-                    num_obj_ptr_tokens=0
+                    num_obj_ptr_tokens=0,
+                    attn_bias=attn_bias,
                 )
                 if memory_gate is not None and self.memory_gate_mode in ("fusion", "both"):
                     pix_feat_with_mem = pix_feat_with_mem * memory_gate
-
             else:
-                pix_feat_with_mem = vision_feats[-1] + torch.nn.Parameter(torch.zeros(1, 1, 128)).to(device="cuda")
+                pix_feat_with_mem = vision_feats[-1]
 
-            image_embed_with_mem = pix_feat_with_mem.to(torch.float32).permute(1, 2, 0).view(1, -1, *feat_sizes[-1])
-
+            image_embed_with_mem = (
+                pix_feat_with_mem.to(torch.float32)
+                .permute(1, 2, 0)
+                .view(1, -1, *feat_sizes[-1])
+            )
             image_embed_list.append(image_embed_with_mem)
                             
             
@@ -739,8 +903,16 @@ class MVT_SAM2_Single(nn.Module):
 
         return final_image_embeds
 
-    def sam2_add_new_memory(self, net, hm, idx, num_views, feat_sizes):
+    def sam2_add_new_memory(self, net, hm, idx, num_views, feat_sizes, role_label=None):
         GPUdevice = self.rank
+        if role_label is None:
+            role_label_value = int(self.latest_eval_role_tag)
+        elif isinstance(role_label, torch.Tensor):
+            role_label_value = int(role_label.detach().view(-1)[0].item())
+        else:
+            role_label_value = int(role_label)
+
+        contrast_view_embeds = []
 
         for view_idx in range(num_views):
                 
@@ -776,12 +948,21 @@ class MVT_SAM2_Single(nn.Module):
             maskmem_features = maskmem_features.to(device=GPUdevice, non_blocking=True)
             maskmem_pos_enc = maskmem_pos_enc[0].to(device=GPUdevice, non_blocking=True)
 
-            memory = maskmem_features.flatten(2).permute(2, 0, 1).reshape(-1, 1, net.mem_dim)
-            memory_pos = maskmem_pos_enc.flatten(2).permute(2, 0, 1).reshape(-1, 1, net.mem_dim)
+            memory = (
+                maskmem_features.flatten(2)
+                .permute(2, 0, 1)
+                .reshape(-1, 1, self.memory_gate_dim)
+            )
+            memory_pos = (
+                maskmem_pos_enc.flatten(2)
+                .permute(2, 0, 1)
+                .reshape(-1, 1, self.memory_gate_dim)
+            )
 
             memory_bank_list = self.memory_bank_multiview[view_idx]
 
             memory_bank_list[self.curr_obs_idx] = [memory, memory_pos]
+            self.memory_role_tags_multiview[view_idx][self.curr_obs_idx] = role_label_value
             if (
                 self.persistent_anchor_enabled
                 and self.curr_obs_idx < self.persistent_anchor_max_steps
@@ -790,6 +971,19 @@ class MVT_SAM2_Single(nn.Module):
                     memory,
                     memory_pos,
                 ]
+                self.anchor_role_tags_multiview[view_idx][
+                    self.curr_obs_idx
+                ] = role_label_value
+
+            if self.role_graph_enabled and self.role_contrast_proj is not None:
+                contrast_view_embeds.append(
+                    self.role_contrast_proj(maskmem_features.mean(dim=(2, 3)))
+                )
+
+        if contrast_view_embeds:
+            contrast_embed = torch.stack(contrast_view_embeds, dim=0).mean(dim=0)
+            self.role_contrast_embeddings_runtime.append(contrast_embed)
+            self.role_contrast_labels_runtime.append(role_label_value)
 
     def forward(
         self,
@@ -813,6 +1007,7 @@ class MVT_SAM2_Single(nn.Module):
         assert num_img == self.num_img
         # assert img_feat_dim == self.img_feat_dim
         assert h == w == self.img_size
+        self._reset_role_graph_runtime()
 
         self._build_memory_gate_context(
             lang_emb=lang_emb,
@@ -1022,6 +1217,7 @@ class MVT_SAM2_Single(nn.Module):
                 num_seq = bs // num_obs
                 bs_ = bs
                 bs = 1
+                role_label_seq = kwargs.get("role_label_seq")
 
                 x_ = []
                 u_ = []
@@ -1065,7 +1261,17 @@ class MVT_SAM2_Single(nn.Module):
                         trans_.append(trans)
 
                         if self.use_memory:
-                            self.sam2_add_new_memory(self.sam2, trans.view(bs, num_img, 1, 1, h, w), idx, num_img, feat_sizes)
+                            curr_role_label = None
+                            if role_label_seq is not None:
+                                curr_role_label = role_label_seq[idx]
+                            self.sam2_add_new_memory(
+                                self.sam2,
+                                trans.view(bs, num_img, 1, 1, h, w),
+                                idx,
+                                num_img,
+                                feat_sizes,
+                                role_label=curr_role_label,
+                            )
                             self.curr_obs_idx += 1
 
                 x = torch.cat(x_, dim=0)
@@ -1107,7 +1313,13 @@ class MVT_SAM2_Single(nn.Module):
 
                 if self.use_memory:
                     with torch.cuda.amp.autocast(enabled=True):
-                        self.sam2_add_new_memory(self.sam2, trans.view(bs, num_img, 1, 1, h, w), 0, num_img, feat_sizes)
+                        self.sam2_add_new_memory(
+                            self.sam2,
+                            trans.view(bs, num_img, 1, 1, h, w),
+                            0,
+                            num_img,
+                            feat_sizes,
+                        )
                     self.curr_obs_idx += 1
                 
         if not self.no_feat:
@@ -1234,6 +1446,27 @@ class MVT_SAM2_Single(nn.Module):
                     ).unsqueeze(1)
         else:
             out = {}
+
+        if self.role_graph_enabled and self.role_graph_logits_runtime:
+            out["role_graph_logits"] = torch.cat(
+                self.role_graph_logits_runtime, dim=0
+            ).unsqueeze(1)
+        if self.phase_graph_logits_runtime:
+            out["phase_graph_logits"] = torch.cat(
+                self.phase_graph_logits_runtime, dim=0
+            ).unsqueeze(1)
+        if self.role_ref_logits_runtime:
+            out["role_ref_logits"] = torch.cat(
+                self.role_ref_logits_runtime, dim=0
+            ).unsqueeze(1)
+        if self.anchor_use_logits_runtime:
+            out["anchor_use_logits"] = torch.cat(
+                self.anchor_use_logits_runtime, dim=0
+            ).view(-1, 1, 1)
+        if self.role_contrast_embeddings_runtime:
+            out["role_contrast_embeddings"] = torch.cat(
+                self.role_contrast_embeddings_runtime, dim=0
+            )
 
         out.update({"trans": trans})
 

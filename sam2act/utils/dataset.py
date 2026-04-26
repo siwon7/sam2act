@@ -23,6 +23,10 @@ from rlbench.demo import Demo
 
 from sam2act.utils.peract_utils import LOW_DIM_SIZE, IMAGE_SIZE, CAMERAS
 from sam2act.utils.memorybench_phases import get_memorybench_phase_label
+from sam2act.utils.memorybench_role_graph import (
+    PUT_BLOCK_BACK_ROLE_NAMES,
+    get_memorybench_role_graph_targets,
+)
 from sam2act.libs.peract.helpers.demo_loading_utils import keypoint_discovery
 from sam2act.libs.peract.helpers.utils import extract_obs
 
@@ -263,6 +267,14 @@ def create_replay_temporal(
         ReplayElement("demo", (), bool),
         ReplayElement("keypoint_idx", (), int),
         ReplayElement("phase_label", (), int),
+        ReplayElement("role_label", (), int),
+        ReplayElement("role_ref_valid", (), int),
+        ReplayElement(
+            "role_ref_mask",
+            (len(PUT_BLOCK_BACK_ROLE_NAMES),),
+            np.float32,
+        ),
+        ReplayElement("anchor_use_label", (), int),
         ReplayElement("episode_idx", (), int),
         ReplayElement("keypoint_frame", (), int),
         ReplayElement("next_keypoint_frame", (), int),
@@ -626,6 +638,10 @@ def _add_keypoints_to_replay_temporal(
 
         prev_action = np.copy(action)
 
+        role_label, role_ref_valid, role_ref_mask, anchor_use_label = (
+            get_memorybench_role_graph_targets(task, k, len(episode_keypoints))
+        )
+
         if k == 0:
             keypoint_frame = -1
         else:
@@ -634,6 +650,10 @@ def _add_keypoints_to_replay_temporal(
             "demo": True,
             "keypoint_idx": k,
             "phase_label": get_memorybench_phase_label(task, k, len(episode_keypoints)),
+            "role_label": role_label,
+            "role_ref_valid": role_ref_valid,
+            "role_ref_mask": role_ref_mask,
+            "anchor_use_label": anchor_use_label,
             "episode_idx": episode_idx,
             "keypoint_frame": keypoint_frame,
             "next_keypoint_frame": keypoint,

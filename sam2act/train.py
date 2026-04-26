@@ -257,13 +257,31 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
         assert exp_cfg.peract.phase_aux_num_classes > 0, (
             "peract.phase_aux_num_classes must be > 0 when phase aux loss is enabled"
         )
-        if mvt_cfg.graph_node_classes in [0, exp_cfg.peract.phase_aux_num_classes]:
-            mvt_cfg.graph_node_classes = exp_cfg.peract.phase_aux_num_classes
+        if mvt_cfg.phase_graph_num_classes in [0, exp_cfg.peract.phase_aux_num_classes]:
+            mvt_cfg.phase_graph_num_classes = exp_cfg.peract.phase_aux_num_classes
         else:
             raise ValueError(
-                "mvt.graph_node_classes does not match peract.phase_aux_num_classes "
-                f"({mvt_cfg.graph_node_classes} vs {exp_cfg.peract.phase_aux_num_classes})"
+                "mvt.phase_graph_num_classes does not match peract.phase_aux_num_classes "
+                f"({mvt_cfg.phase_graph_num_classes} vs {exp_cfg.peract.phase_aux_num_classes})"
             )
+    if exp_cfg.peract.role_graph_loss_weight > 0.0:
+        assert mvt_cfg.role_graph_enabled, (
+            "mvt.role_graph_enabled must be True when role graph loss is enabled"
+        )
+        assert mvt_cfg.role_graph_num_classes > 0, (
+            "mvt.role_graph_num_classes must be > 0 when role graph loss is enabled"
+        )
+    if exp_cfg.peract.role_ref_loss_weight > 0.0:
+        assert mvt_cfg.role_graph_enabled, (
+            "mvt.role_graph_enabled must be True when role reference loss is enabled"
+        )
+        assert mvt_cfg.role_graph_num_classes > 0, (
+            "mvt.role_graph_num_classes must be > 0 when role reference loss is enabled"
+        )
+    if exp_cfg.peract.anchor_use_loss_weight > 0.0:
+        assert mvt_cfg.role_graph_enabled, (
+            "mvt.role_graph_enabled must be True when anchor use loss is enabled"
+        )
     mvt_cfg.freeze()
 
     # for maintaining backward compatibility
