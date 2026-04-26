@@ -55,6 +55,14 @@ _C.resize_rgb = True
 _C.use_memory = False
 _C.num_maskmem = 7
 _C.graph_node_classes = 0
+_C.edge_bias_enabled = False
+_C.edge_bias_lambda = 0.0
+_C.edge_bias_temporal_scale = 0.0
+_C.edge_bias_revisit_scale = 0.0
+_C.edge_bias_transition_scale = 0.0
+_C.edge_bias_revisit_sigma = 0.25
+_C.edge_bias_ref_match_threshold = 0.05
+_C.edge_bias_transition_hop = 1
 
 _C.sam2_config = '/configs/sam2.1/sam2.1_hiera_b+'
 _C.sam2_ckpt = './mvt/sam2_train/checkpoints/sam2.1_hiera_base_plus.pt'

@@ -72,6 +72,11 @@ unset XAUTHORITY
 cd "$CODE_ROOT"
 
 echo "[cv11_eval_success_combo] mode=$MODE model=$MODEL_NAME eval_episodes=$EVAL_EPISODES"
+EXTRA_ARGS=()
+if [[ -n "${MVT_CFG_OPTS:-}" ]]; then
+  EXTRA_ARGS+=(--mvt_cfg_opts "$MVT_CFG_OPTS")
+  echo "[cv11_eval_success_combo] mvt_cfg_opts=$MVT_CFG_OPTS"
+fi
 python eval.py \
   --model-folder "$RUN_DIR" \
   --model-name "$MODEL_NAME" \
@@ -80,7 +85,8 @@ python eval.py \
   --eval-episodes "$EVAL_EPISODES" \
   --log-name "$LOG_NAME" \
   --device 0 \
-  --headless
+  --headless \
+  "${EXTRA_ARGS[@]}"
 
 EVAL_CSV="$RUN_DIR/eval/$LOG_NAME/${MODEL_NAME%.pth}/eval_results.csv"
 if [[ -f "$EVAL_CSV" ]]; then

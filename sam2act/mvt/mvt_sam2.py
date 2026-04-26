@@ -94,6 +94,14 @@ class MVT_SAM2(nn.Module):
         use_memory,
         num_maskmem,
         graph_node_classes,
+        edge_bias_enabled=False,
+        edge_bias_lambda=0.0,
+        edge_bias_temporal_scale=0.0,
+        edge_bias_revisit_scale=0.0,
+        edge_bias_transition_scale=0.0,
+        edge_bias_revisit_sigma=0.25,
+        edge_bias_ref_match_threshold=0.05,
+        edge_bias_transition_hop=1,
         renderer_device="cuda:0",
     ):
         """MultiView Transfomer
@@ -171,6 +179,14 @@ class MVT_SAM2(nn.Module):
         self.use_memory = use_memory
         self.num_maskmem = num_maskmem
         self.graph_node_classes = graph_node_classes
+        self.edge_bias_enabled = edge_bias_enabled
+        self.edge_bias_lambda = edge_bias_lambda
+        self.edge_bias_temporal_scale = edge_bias_temporal_scale
+        self.edge_bias_revisit_scale = edge_bias_revisit_scale
+        self.edge_bias_transition_scale = edge_bias_transition_scale
+        self.edge_bias_revisit_sigma = edge_bias_revisit_sigma
+        self.edge_bias_ref_match_threshold = edge_bias_ref_match_threshold
+        self.edge_bias_transition_hop = edge_bias_transition_hop
 
         if self.ifSAM2:
             # sam2 = build_sam2_custom(self.sam2_config, self.sam2_ckpt, device="cuda", image_size=self.img_size if not self.resize_rgb else 256) #, num_maskmem=self.num_maskmem)

@@ -3,6 +3,8 @@
 # Licensed under the NVIDIA Source Code License [see LICENSE for details].
 
 from math import ceil
+import math
+from typing import Optional
 
 import torch
 import torch.nn.functional as F
@@ -100,6 +102,14 @@ class MVT_SAM2_Single(nn.Module):
         use_memory,
         num_maskmem,
         graph_node_classes,
+        edge_bias_enabled=False,
+        edge_bias_lambda=0.0,
+        edge_bias_temporal_scale=0.0,
+        edge_bias_revisit_scale=0.0,
+        edge_bias_transition_scale=0.0,
+        edge_bias_revisit_sigma=0.25,
+        edge_bias_ref_match_threshold=0.05,
+        edge_bias_transition_hop=1,
         renderer_device="cuda:0",
         renderer=None,
         no_feat=False,
@@ -203,6 +213,18 @@ class MVT_SAM2_Single(nn.Module):
         self.use_memory = use_memory
         self.num_maskmem = num_maskmem
         self.graph_node_classes = graph_node_classes
+        self.edge_bias_enabled = edge_bias_enabled
+        self.edge_bias_lambda = float(edge_bias_lambda)
+        self.edge_bias_temporal_scale = float(edge_bias_temporal_scale)
+        self.edge_bias_revisit_scale = float(edge_bias_revisit_scale)
+        self.edge_bias_transition_scale = float(edge_bias_transition_scale)
+        self.edge_bias_revisit_sigma = float(edge_bias_revisit_sigma)
+        self.edge_bias_ref_match_threshold = float(edge_bias_ref_match_threshold)
+        self.edge_bias_transition_hop = int(edge_bias_transition_hop)
+
+        self._edge_bias_wpt_by_obs_idx = {}
+        self._edge_bias_last_pred_wpt: Optional[torch.Tensor] = None
+        self._edge_bias_prev_ref_obs_idx: Optional[int] = None
 
         self.curr_obs_idx = 0
 
@@ -539,6 +561,68 @@ class MVT_SAM2_Single(nn.Module):
     def reset_memory_bank(self):
         self.memory_bank_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
         self.curr_obs_idx = 0
+        self._edge_bias_wpt_by_obs_idx = {}
+        self._edge_bias_last_pred_wpt = None
+        self._edge_bias_prev_ref_obs_idx = None
+
+    def _edge_bias_compute_entry_bias(self, candidate_obs_idx: int, t_pos: int, num_mem: int) -> float:
+        if not self.edge_bias_enabled:
+            return 0.0
+
+        bias = 0.0
+
+        if self.edge_bias_temporal_scale != 0.0 and num_mem > 1:
+            # recent memory gets a small bonus
+            temporal = (num_mem - t_pos) / float(num_mem - 1)
+            bias += self.edge_bias_temporal_scale * temporal
+
+        if self.edge_bias_revisit_scale != 0.0 and self._edge_bias_last_pred_wpt is not None:
+            mem_wpt = self._edge_bias_wpt_by_obs_idx.get(candidate_obs_idx)
+            if mem_wpt is not None:
+                dist = torch.norm(
+                    (self._edge_bias_last_pred_wpt - mem_wpt).to(dtype=torch.float32)
+                ).item()
+                sigma = max(self.edge_bias_revisit_sigma, 1e-6)
+                revisit = math.exp(-dist / sigma)
+                bias += self.edge_bias_revisit_scale * revisit
+
+        if (
+            self.edge_bias_transition_scale != 0.0
+            and self._edge_bias_prev_ref_obs_idx is not None
+        ):
+            hop = max(self.edge_bias_transition_hop, 0)
+            connected = (
+                abs(candidate_obs_idx - self._edge_bias_prev_ref_obs_idx) <= hop
+            )
+            bias += self.edge_bias_transition_scale * (1.0 if connected else 0.0)
+
+        return self.edge_bias_lambda * bias
+
+    def _edge_bias_update_state_after_write(self, written_obs_idx: int, pred_wpt: torch.Tensor) -> None:
+        if not self.edge_bias_enabled:
+            return
+
+        pred_wpt = pred_wpt.detach()
+        if pred_wpt.ndim == 2 and pred_wpt.shape[0] == 1:
+            pred_wpt = pred_wpt[0]
+        self._edge_bias_last_pred_wpt = pred_wpt
+        self._edge_bias_wpt_by_obs_idx[written_obs_idx] = pred_wpt
+
+        # pseudo "which memory did we revisit": nearest past waypoint under threshold
+        best_idx = None
+        best_dist = None
+        for obs_idx, wpt in self._edge_bias_wpt_by_obs_idx.items():
+            if obs_idx >= written_obs_idx:
+                continue
+            dist = torch.norm((pred_wpt - wpt).to(dtype=torch.float32)).item()
+            if best_dist is None or dist < best_dist:
+                best_dist = dist
+                best_idx = obs_idx
+
+        if best_dist is not None and best_dist <= self.edge_bias_ref_match_threshold:
+            self._edge_bias_prev_ref_obs_idx = int(best_idx)
+        else:
+            self._edge_bias_prev_ref_obs_idx = None
 
     def sam2_forward_with_memory(self, net, idx, num_views, feat_sizes):
         GPUdevice = self.rank
@@ -567,6 +651,7 @@ class MVT_SAM2_Single(nn.Module):
 
                 to_cat_memory = []
                 to_cat_memory_pos_embed = []
+                to_cat_edge_bias = []
 
                 for t_pos, prev in t_pos_and_prevs:
                     # "maskmem_features" might have been offloaded to CPU in demo use cases,
@@ -582,8 +667,33 @@ class MVT_SAM2_Single(nn.Module):
                     )
                     to_cat_memory_pos_embed.append(maskmem_enc)
 
+                    candidate_obs_idx = self.curr_obs_idx - t_pos
+                    to_cat_edge_bias.append(
+                        self._edge_bias_compute_entry_bias(
+                            candidate_obs_idx=candidate_obs_idx,
+                            t_pos=t_pos,
+                            num_mem=num_mem,
+                        )
+                    )
+
                 memory_fused = torch.cat(to_cat_memory, dim=0)
                 memory_pos_fused = torch.cat(to_cat_memory_pos_embed, dim=0)
+
+                edge_bias_mask = None
+                if self.edge_bias_enabled and any(b != 0.0 for b in to_cat_edge_bias):
+                    # Broadcastable additive bias for SDPA: [B, 1, 1, S]
+                    bias_tokens = []
+                    for bias_value, feats in zip(to_cat_edge_bias, to_cat_memory):
+                        num_tokens = feats.shape[0]
+                        bias_tokens.append(
+                            torch.full(
+                                (num_tokens,),
+                                float(bias_value),
+                                device=feats.device,
+                                dtype=torch.float32,
+                            )
+                        )
+                    edge_bias_mask = torch.cat(bias_tokens, dim=0).view(1, 1, 1, -1)
                 
                 '''memory attention'''
 
@@ -593,6 +703,7 @@ class MVT_SAM2_Single(nn.Module):
                     curr_pos=[vision_pos_embeds[-1]],
                     memory=memory_fused,
                     memory_pos=memory_pos_fused,
+                    memory_attn_mask=edge_bias_mask,
                     num_obj_ptr_tokens=0
                 )
 
@@ -924,6 +1035,16 @@ class MVT_SAM2_Single(nn.Module):
                         trans_.append(trans)
 
                         if self.use_memory:
+                            if self.edge_bias_enabled:
+                                with torch.no_grad():
+                                    pred_wpt = self.get_wpt(
+                                        out={"trans": trans.detach()},
+                                        dyn_cam_info=None,
+                                    )
+                                self._edge_bias_update_state_after_write(
+                                    written_obs_idx=self.curr_obs_idx,
+                                    pred_wpt=pred_wpt,
+                                )
                             self.sam2_add_new_memory(self.sam2, trans.view(bs, num_img, 1, 1, h, w), idx, num_img, feat_sizes)
                             self.curr_obs_idx += 1
 
@@ -966,6 +1087,16 @@ class MVT_SAM2_Single(nn.Module):
 
                 if self.use_memory:
                     with torch.cuda.amp.autocast(enabled=True):
+                        if self.edge_bias_enabled:
+                            with torch.no_grad():
+                                pred_wpt = self.get_wpt(
+                                    out={"trans": trans.detach()},
+                                    dyn_cam_info=None,
+                                )
+                            self._edge_bias_update_state_after_write(
+                                written_obs_idx=self.curr_obs_idx,
+                                pred_wpt=pred_wpt,
+                            )
                         self.sam2_add_new_memory(self.sam2, trans.view(bs, num_img, 1, 1, h, w), 0, num_img, feat_sizes)
                     self.curr_obs_idx += 1
                 

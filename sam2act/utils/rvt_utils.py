@@ -274,6 +274,12 @@ def get_eval_parser():
     parser.add_argument("--ground-truth", action="store_true", default=False)
     parser.add_argument("--exp_cfg_path", type=str, default=None)
     parser.add_argument("--mvt_cfg_path", type=str, default=None)
+    parser.add_argument(
+        "--mvt_cfg_opts",
+        type=str,
+        default="",
+        help='Override mvt config via "<k1> <v1> <k2> <v2> ..."',
+    )
     parser.add_argument("--peract_official", action="store_true")
     parser.add_argument(
         "--peract_model_dir",

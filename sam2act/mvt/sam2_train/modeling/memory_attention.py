@@ -63,7 +63,9 @@ class MemoryAttentionLayer(nn.Module):
         tgt = tgt + self.dropout1(tgt2)
         return tgt
 
-    def _forward_ca(self, tgt, memory, query_pos, pos, num_k_exclude_rope=0):
+    def _forward_ca(
+        self, tgt, memory, query_pos, pos, num_k_exclude_rope=0, attn_mask=None
+    ):
         kwds = {}
         if num_k_exclude_rope > 0:
             assert isinstance(self.cross_attn_image, RoPEAttention)
@@ -75,6 +77,7 @@ class MemoryAttentionLayer(nn.Module):
             q=tgt2 + query_pos if self.pos_enc_at_cross_attn_queries else tgt2,
             k=memory + pos if self.pos_enc_at_cross_attn_keys else memory,
             v=memory,
+            attn_mask=attn_mask,
             **kwds,
         )
         tgt = tgt + self.dropout2(tgt2)
@@ -86,12 +89,15 @@ class MemoryAttentionLayer(nn.Module):
         memory,
         pos: Optional[Tensor] = None,
         query_pos: Optional[Tensor] = None,
+        attn_mask: Optional[Tensor] = None,
         num_k_exclude_rope: int = 0,
     ) -> torch.Tensor:
 
         # Self-Attn, Cross-Attn
         tgt = self._forward_sa(tgt, query_pos)
-        tgt = self._forward_ca(tgt, memory, query_pos, pos, num_k_exclude_rope)
+        tgt = self._forward_ca(
+            tgt, memory, query_pos, pos, num_k_exclude_rope, attn_mask=attn_mask
+        )
         # MLP
         tgt2 = self.norm3(tgt)
         tgt2 = self.linear2(self.dropout(self.activation(self.linear1(tgt2))))
@@ -122,6 +128,7 @@ class MemoryAttention(nn.Module):
         memory: torch.Tensor,  # cross-attention inputs
         curr_pos: Optional[Tensor] = None,  # pos_enc for self-attention inputs
         memory_pos: Optional[Tensor] = None,  # pos_enc for cross-attention inputs
+        memory_attn_mask: Optional[Tensor] = None,  # additive bias or mask for memory cross-attention
         num_obj_ptr_tokens: int = 0,  # number of object pointer *tokens*
     ):
         if isinstance(curr, list):
@@ -157,6 +164,7 @@ class MemoryAttention(nn.Module):
                 memory=memory,
                 pos=memory_pos,
                 query_pos=curr_pos,
+                attn_mask=memory_attn_mask,
                 **kwds,
             )
         normed_output = self.norm(output)

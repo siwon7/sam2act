@@ -81,6 +81,7 @@ def load_agent(
     peract_model_dir=None,
     exp_cfg_path=None,
     mvt_cfg_path=None,
+    mvt_cfg_opts="",
     eval_log_dir="",
     device=0,
     use_input_place_with_mean=False,
@@ -170,6 +171,8 @@ def load_agent(
                 else:
                     mvt_cfg.merge_from_file(os.path.join(model_folder, "mvt_cfg_plus.yaml"))
 
+            if mvt_cfg_opts:
+                mvt_cfg.merge_from_list(mvt_cfg_opts.split(" "))
             mvt_cfg.freeze()
 
             # for rvt-2 we do not change place_with_mean regardless of the arg
@@ -540,6 +543,7 @@ def _eval(args):
                 model_path=model_path,
                 exp_cfg_path=args.exp_cfg_path,
                 mvt_cfg_path=args.mvt_cfg_path,
+                mvt_cfg_opts=args.mvt_cfg_opts,
                 eval_log_dir=args.eval_log_dir,
                 device=args.device,
                 use_input_place_with_mean=args.use_input_place_with_mean,
