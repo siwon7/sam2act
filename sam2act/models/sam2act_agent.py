@@ -9,6 +9,7 @@ import torch
 import torchvision
 import numpy as np
 import torch.nn as nn
+import torch.nn.functional as F
 import bitsandbytes as bnb
 
 from scipy.spatial.transform import Rotation
@@ -335,6 +336,10 @@ class SAM2Act_Agent:
         graph_retrieval_mode_label_key: str = "graph_mode_label",
         graph_retrieval_ref_valid_key: str = "graph_ref_valid",
         graph_retrieval_ref_label_key: str = "graph_ref_mask",
+        latent_revisit_loss_weight: float = 0.0,
+        latent_proto_align_loss_weight: float = 0.0,
+        latent_proto_usage_loss_weight: float = 0.0,
+        latent_proto_match_thresh: float = 0.05,
     ):
         """
         :param gt_hm_sigma: the std of the groundtruth hm, currently for for
@@ -407,6 +412,10 @@ class SAM2Act_Agent:
         self.graph_retrieval_mode_label_key = graph_retrieval_mode_label_key
         self.graph_retrieval_ref_valid_key = graph_retrieval_ref_valid_key
         self.graph_retrieval_ref_label_key = graph_retrieval_ref_label_key
+        self.latent_revisit_loss_weight = latent_revisit_loss_weight
+        self.latent_proto_align_loss_weight = latent_proto_align_loss_weight
+        self.latent_proto_usage_loss_weight = latent_proto_usage_loss_weight
+        self.latent_proto_match_thresh = latent_proto_match_thresh
         self._bce_with_logits_loss = nn.BCEWithLogitsLoss(reduction="none")
 
     def build(self, training: bool, device: torch.device = None):
@@ -544,6 +553,46 @@ class SAM2Act_Agent:
             action_rot_z_one_hot,
             action_grip_one_hot,
             action_collision_one_hot,
+        )
+
+    def _build_latent_revisit_targets(self, action_trans_con: torch.Tensor):
+        bs = action_trans_con.shape[0]
+        num_obs = self._num_maskmem + 1
+        if bs % num_obs != 0:
+            raise ValueError(
+                f"Expected batch size {bs} to be divisible by num_obs {num_obs}"
+            )
+        num_seq = bs // num_obs
+        revisit_labels = torch.zeros(bs, device=action_trans_con.device)
+        prev_match_mask = torch.zeros(bs, bs, device=action_trans_con.device)
+        thresh = float(self.latent_proto_match_thresh)
+
+        for seq_idx in range(num_seq):
+            start = seq_idx * num_obs
+            end = start + num_obs
+            seq_pos = action_trans_con[start:end]
+            for step_idx in range(num_obs):
+                if step_idx == 0:
+                    continue
+                curr = seq_pos[step_idx : step_idx + 1]
+                prev = seq_pos[:step_idx]
+                dists = torch.linalg.vector_norm(prev - curr, dim=-1)
+                hits = dists <= thresh
+                if hits.any():
+                    revisit_labels[start + step_idx] = 1.0
+                    prev_match_mask[start + step_idx, start : start + step_idx] = (
+                        hits.float()
+                    )
+
+        return revisit_labels, prev_match_mask
+
+    def _latent_proto_usage_loss(self, logits: torch.Tensor):
+        probs = torch.softmax(logits, dim=-1)
+        avg_probs = probs.mean(dim=0)
+        num_proto = avg_probs.shape[-1]
+        uniform = torch.full_like(avg_probs, 1.0 / num_proto)
+        return torch.sum(
+            avg_probs * (avg_probs.clamp_min(1e-8).log() - uniform.log())
         )
 
     def get_q(self, out, dims, only_pred=False, get_q_trans=True):
@@ -817,6 +866,10 @@ class SAM2Act_Agent:
             retrieval_mode_acc = None
             retrieval_ref_loss = torch.tensor(0.0, device=self._device)
             retrieval_ref_top3_acc = None
+            latent_revisit_loss = torch.tensor(0.0, device=self._device)
+            latent_revisit_acc = None
+            latent_proto_align_loss = torch.tensor(0.0, device=self._device)
+            latent_proto_usage_loss = torch.tensor(0.0, device=self._device)
             if (
                 self.graph_node_loss_weight > 0.0
                 and "graph_node_logits" in pred_out
@@ -920,6 +973,48 @@ class SAM2Act_Agent:
                         retrieval_ref_target[valid_mask], 1, topk_idx
                     ).sum(dim=-1) > 0
                     retrieval_ref_top3_acc = topk_hits.float().mean()
+            if (
+                (
+                    self.latent_revisit_loss_weight > 0.0
+                    or self.latent_proto_align_loss_weight > 0.0
+                    or self.latent_proto_usage_loss_weight > 0.0
+                )
+                and "latent_revisit_logits" in pred_out
+                and "latent_proto_query_logits" in pred_out
+                and "latent_proto_write_logits" in pred_out
+            ):
+                latent_revisit_target, latent_prev_match_mask = (
+                    self._build_latent_revisit_targets(action_trans_con)
+                )
+                latent_revisit_logits = pred_out["latent_revisit_logits"].view(bs)
+                latent_revisit_loss = self._bce_with_logits_loss(
+                    latent_revisit_logits, latent_revisit_target
+                ).mean()
+                latent_revisit_acc = (
+                    (torch.sigmoid(latent_revisit_logits) > 0.5)
+                    == (latent_revisit_target > 0.5)
+                ).float().mean()
+
+                latent_query_logits = pred_out["latent_proto_query_logits"].view(bs, -1)
+                latent_write_logits = pred_out["latent_proto_write_logits"].view(bs, -1)
+                latent_write_probs = torch.softmax(latent_write_logits.detach(), dim=-1)
+
+                valid_rows = latent_prev_match_mask.sum(dim=-1) > 0
+                if valid_rows.any():
+                    target_proto = latent_prev_match_mask[valid_rows] @ latent_write_probs
+                    target_proto = target_proto / target_proto.sum(
+                        dim=-1, keepdim=True
+                    ).clamp_min(1e-6)
+                    latent_proto_align_loss = F.kl_div(
+                        torch.log_softmax(latent_query_logits[valid_rows], dim=-1),
+                        target_proto,
+                        reduction="batchmean",
+                    )
+
+                latent_proto_usage_loss = 0.5 * (
+                    self._latent_proto_usage_loss(latent_query_logits)
+                    + self._latent_proto_usage_loss(latent_write_logits)
+                )
 
         loss_log = {}
         if backprop:
@@ -988,6 +1083,15 @@ class SAM2Act_Agent:
                     total_loss = total_loss + (
                         self.graph_retrieval_ref_loss_weight * retrieval_ref_loss
                     )
+                    total_loss = total_loss + (
+                        self.latent_revisit_loss_weight * latent_revisit_loss
+                    )
+                    total_loss = total_loss + (
+                        self.latent_proto_align_loss_weight * latent_proto_align_loss
+                    )
+                    total_loss = total_loss + (
+                        self.latent_proto_usage_loss_weight * latent_proto_usage_loss
+                    )
 
 
             self._optimizer.zero_grad(set_to_none=True)
@@ -1031,6 +1135,18 @@ class SAM2Act_Agent:
                 else None,
                 "retrieval_ref_top3_acc": retrieval_ref_top3_acc.item()
                 if retrieval_ref_top3_acc is not None
+                else None,
+                "latent_revisit_loss": latent_revisit_loss.item()
+                if self.latent_revisit_loss_weight > 0.0
+                else None,
+                "latent_revisit_acc": latent_revisit_acc.item()
+                if latent_revisit_acc is not None
+                else None,
+                "latent_proto_align_loss": latent_proto_align_loss.item()
+                if self.latent_proto_align_loss_weight > 0.0
+                else None,
+                "latent_proto_usage_loss": latent_proto_usage_loss.item()
+                if self.latent_proto_usage_loss_weight > 0.0
                 else None,
                 "lr": self._optimizer.param_groups[0]["lr"],
             }

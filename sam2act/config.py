@@ -51,6 +51,10 @@ _C.peract.graph_retrieval_ref_loss_weight = 0.0
 _C.peract.graph_retrieval_mode_label_key = "graph_mode_label"
 _C.peract.graph_retrieval_ref_valid_key = "graph_ref_valid"
 _C.peract.graph_retrieval_ref_label_key = "graph_ref_mask"
+_C.peract.latent_revisit_loss_weight = 0.0
+_C.peract.latent_proto_align_loss_weight = 0.0
+_C.peract.latent_proto_usage_loss_weight = 0.0
+_C.peract.latent_proto_match_thresh = 0.05
 
 # arguments present in only rvt and not peract
 _C.rvt = CN()

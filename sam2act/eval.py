@@ -8,6 +8,7 @@ import csv
 import torch
 import cv2
 import shutil
+import sys
 
 import numpy as np
 
@@ -18,6 +19,10 @@ from copy import deepcopy
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["BITSANDBYTES_NOWELCOME"] = "1"
+
+_LOCAL_YARR = os.path.join(os.path.dirname(__file__), "libs", "YARR")
+if _LOCAL_YARR not in sys.path:
+    sys.path.insert(0, _LOCAL_YARR)
 
 from rlbench.backend import task as rlbench_task
 from rlbench.backend.utils import task_file_to_task_class

@@ -113,6 +113,11 @@ class MVT_SAM2_Single(nn.Module):
         graph_retrieval_num_classes=0,
         graph_retrieval_hidden_dim=128,
         graph_retrieval_bias_scale=0.0,
+        latent_proto_enabled=False,
+        latent_proto_num_prototypes=8,
+        latent_proto_hidden_dim=128,
+        latent_proto_bias_scale=0.0,
+        latent_proto_use_text=True,
         renderer_device="cuda:0",
         renderer=None,
         no_feat=False,
@@ -229,9 +234,15 @@ class MVT_SAM2_Single(nn.Module):
         self.graph_retrieval_num_classes = graph_retrieval_num_classes
         self.graph_retrieval_hidden_dim = graph_retrieval_hidden_dim
         self.graph_retrieval_bias_scale = graph_retrieval_bias_scale
+        self.latent_proto_enabled = latent_proto_enabled
+        self.latent_proto_num_prototypes = latent_proto_num_prototypes
+        self.latent_proto_hidden_dim = latent_proto_hidden_dim
+        self.latent_proto_bias_scale = latent_proto_bias_scale
+        self.latent_proto_use_text = latent_proto_use_text
 
         self.curr_obs_idx = 0
         self.memory_gate_context = None
+        self.current_lang_emb = None
 
         self.memory_bank_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
         self.anchor_memory_bank_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
@@ -428,6 +439,40 @@ class MVT_SAM2_Single(nn.Module):
             self.graph_retrieval_query_proj = None
             self.graph_retrieval_mode_head = None
             self.graph_retrieval_ref_head = None
+
+        if self.latent_proto_enabled and self.latent_proto_num_prototypes > 0:
+            self.latent_proto_visual_proj = nn.Sequential(
+                nn.Linear(self.graph_retrieval_input_dim, self.latent_proto_hidden_dim),
+                act_layer(activation),
+                nn.Linear(self.latent_proto_hidden_dim, self.memory_gate_dim),
+            )
+            if self.latent_proto_use_text and self.add_lang:
+                self.latent_proto_text_proj = nn.Sequential(
+                    nn.Linear(self.lang_emb_dim, self.latent_proto_hidden_dim),
+                    act_layer(activation),
+                    nn.Linear(self.latent_proto_hidden_dim, self.memory_gate_dim),
+                )
+            else:
+                self.latent_proto_text_proj = None
+            self.latent_proto_query_head = nn.Linear(
+                self.memory_gate_dim, self.latent_proto_num_prototypes
+            )
+            self.latent_proto_write_head = nn.Linear(
+                self.memory_gate_dim, self.latent_proto_num_prototypes
+            )
+            self.latent_proto_revisit_head = nn.Linear(self.memory_gate_dim, 1)
+            self.latent_proto_visual_proj.apply(initialize_weights)
+            if self.latent_proto_text_proj is not None:
+                self.latent_proto_text_proj.apply(initialize_weights)
+            self.latent_proto_query_head.apply(initialize_weights)
+            self.latent_proto_write_head.apply(initialize_weights)
+            self.latent_proto_revisit_head.apply(initialize_weights)
+        else:
+            self.latent_proto_visual_proj = None
+            self.latent_proto_text_proj = None
+            self.latent_proto_query_head = None
+            self.latent_proto_write_head = None
+            self.latent_proto_revisit_head = None
 
         get_attn_attn = lambda: PreNorm(
             attn_dim,
@@ -632,6 +677,11 @@ class MVT_SAM2_Single(nn.Module):
     def _reset_memory_gate_context(self):
         self.memory_gate_context = None
 
+    def _reset_latent_proto_runtime(self):
+        self.latent_proto_query_logits_runtime = []
+        self.latent_proto_write_logits_runtime = []
+        self.latent_revisit_logits_runtime = []
+
     def _build_memory_gate_context(self, lang_emb=None, task_cond=None):
         self._reset_memory_gate_context()
         if not self.memory_gate_enabled:
@@ -666,6 +716,52 @@ class MVT_SAM2_Single(nn.Module):
         if idx < 0 or idx >= self.memory_gate_context.shape[0]:
             return None
         return self.memory_gate_context[idx: idx + 1].unsqueeze(0).to(device=device)
+
+    def _compute_latent_proto_outputs(self, vision_feats, idx):
+        if (
+            not self.latent_proto_enabled
+            or self.latent_proto_query_head is None
+            or self.latent_proto_visual_proj is None
+        ):
+            return None, None
+
+        query = vision_feats[-1].mean(dim=0)
+        query = self.latent_proto_visual_proj(query)
+
+        if (
+            self.latent_proto_text_proj is not None
+            and self.current_lang_emb is not None
+            and 0 <= idx < self.current_lang_emb.shape[0]
+        ):
+            text_feat = self.current_lang_emb[idx : idx + 1].mean(dim=1)
+            query = query + self.latent_proto_text_proj(text_feat)
+
+        proto_logits = self.latent_proto_query_head(query)
+        revisit_logits = self.latent_proto_revisit_head(query).view(-1)
+        return proto_logits, revisit_logits
+
+    def _compute_latent_proto_scale(
+        self,
+        memory_proto_probs,
+        query_proto_logits,
+        revisit_logits,
+        device,
+    ):
+        if (
+            not self.latent_proto_enabled
+            or self.latent_proto_bias_scale <= 0.0
+            or memory_proto_probs is None
+            or query_proto_logits is None
+            or revisit_logits is None
+        ):
+            return None
+
+        query_proto_probs = torch.softmax(query_proto_logits.to(device=device), dim=-1)
+        memory_proto_probs = memory_proto_probs.to(device=device).view(1, -1)
+        proto_sim = torch.sum(query_proto_probs * memory_proto_probs, dim=-1)
+        revisit_prob = torch.sigmoid(revisit_logits.to(device=device))
+        scale = 1.0 + self.latent_proto_bias_scale * revisit_prob * proto_sim
+        return scale.view(1, 1, 1)
 
     def _compute_graph_retrieval_logits(self, vision_feats):
         if not self.graph_retrieval_enabled or self.graph_retrieval_query_proj is None:
@@ -706,6 +802,8 @@ class MVT_SAM2_Single(nn.Module):
         image_embed_list = []
         retrieval_mode_logits = None
         retrieval_ref_logits = None
+        latent_proto_query_logits = None
+        latent_revisit_logits = None
 
         for view_idx in range(num_views):
             
@@ -717,6 +815,9 @@ class MVT_SAM2_Single(nn.Module):
             if view_idx == 0:
                 retrieval_mode_logits, retrieval_ref_logits = (
                     self._compute_graph_retrieval_logits(vision_feats)
+                )
+                latent_proto_query_logits, latent_revisit_logits = (
+                    self._compute_latent_proto_outputs(vision_feats, idx)
                 )
 
             '''retrieve memory from memory bank'''
@@ -750,8 +851,16 @@ class MVT_SAM2_Single(nn.Module):
                         ref_logits=retrieval_ref_logits,
                         device=feats.device,
                     )
+                    latent_scale = self._compute_latent_proto_scale(
+                        memory_proto_probs=prev[3] if len(prev) > 3 else None,
+                        query_proto_logits=latent_proto_query_logits,
+                        revisit_logits=latent_revisit_logits,
+                        device=feats.device,
+                    )
                     if scale is not None:
                         feats = feats * scale
+                    if latent_scale is not None:
+                        feats = feats * latent_scale
                     to_cat_memory.append(feats)
                     # Spatial positional encoding (it might have been offloaded to CPU in eval)
                     maskmem_enc = prev[1].cuda()
@@ -773,8 +882,16 @@ class MVT_SAM2_Single(nn.Module):
                         ref_logits=retrieval_ref_logits,
                         device=feats.device,
                     )
+                    latent_scale = self._compute_latent_proto_scale(
+                        memory_proto_probs=anchor_prev[3] if len(anchor_prev) > 3 else None,
+                        query_proto_logits=latent_proto_query_logits,
+                        revisit_logits=latent_revisit_logits,
+                        device=feats.device,
+                    )
                     if scale is not None:
                         feats = feats * scale
+                    if latent_scale is not None:
+                        feats = feats * latent_scale
                     anchor_memory.append(feats)
                     anchor_enc = anchor_prev[1].cuda()
                     if self.persistent_anchor_tpos_enc is not None:
@@ -821,7 +938,13 @@ class MVT_SAM2_Single(nn.Module):
 
         final_image_embeds = image_embeds.to(GPUdevice)
 
-        return final_image_embeds, retrieval_mode_logits, retrieval_ref_logits
+        return (
+            final_image_embeds,
+            retrieval_mode_logits,
+            retrieval_ref_logits,
+            latent_proto_query_logits,
+            latent_revisit_logits,
+        )
 
     def sam2_add_new_memory(self, net, hm, idx, num_views, feat_sizes, node_tag=None):
         GPUdevice = self.rank
@@ -862,6 +985,13 @@ class MVT_SAM2_Single(nn.Module):
 
             memory = maskmem_features.flatten(2).permute(2, 0, 1).reshape(-1, 1, net.mem_dim)
             memory_pos = maskmem_pos_enc.flatten(2).permute(2, 0, 1).reshape(-1, 1, net.mem_dim)
+            memory_proto_probs = None
+            if self.latent_proto_enabled and self.latent_proto_write_head is not None:
+                memory_summary = memory.mean(dim=0)
+                memory_proto_logits = self.latent_proto_write_head(memory_summary)
+                if view_idx == 0:
+                    self.latent_proto_write_logits_runtime.append(memory_proto_logits)
+                memory_proto_probs = torch.softmax(memory_proto_logits.detach(), dim=-1)
 
             memory_bank_list = self.memory_bank_multiview[view_idx]
 
@@ -870,7 +1000,12 @@ class MVT_SAM2_Single(nn.Module):
             else:
                 node_tag_to_store = int(node_tag)
 
-            memory_bank_list[self.curr_obs_idx] = [memory, memory_pos, node_tag_to_store]
+            memory_bank_list[self.curr_obs_idx] = [
+                memory,
+                memory_pos,
+                node_tag_to_store,
+                memory_proto_probs,
+            ]
             if (
                 self.persistent_anchor_enabled
                 and self.curr_obs_idx < self.persistent_anchor_max_steps
@@ -879,6 +1014,7 @@ class MVT_SAM2_Single(nn.Module):
                     memory,
                     memory_pos,
                     node_tag_to_store,
+                    memory_proto_probs,
                 ]
 
     def forward(
@@ -899,6 +1035,8 @@ class MVT_SAM2_Single(nn.Module):
         """
 
         bs, num_img, img_feat_dim, h, w = img.shape
+        self._reset_latent_proto_runtime()
+        self.current_lang_emb = lang_emb
         num_pat_img = h // self.img_patch_size
         assert num_img == self.num_img
         # assert img_feat_dim == self.img_feat_dim
@@ -1064,6 +1202,8 @@ class MVT_SAM2_Single(nn.Module):
 
         retrieval_mode_logits = None
         retrieval_ref_logits = None
+        latent_proto_query_logits = None
+        latent_revisit_logits = None
 
         feat = []
         _feat = torch.max(torch.max(x, dim=-1)[0], dim=-1)[0]
@@ -1126,13 +1266,21 @@ class MVT_SAM2_Single(nn.Module):
                 trans_ = []
                 retrieval_mode_logits_ = []
                 retrieval_ref_logits_ = []
+                latent_proto_query_logits_ = []
+                latent_revisit_logits_ = []
                 for seq_idx in range(num_seq):
                     self.reset_memory_bank()
 
                     for obs_idx in range(num_obs):
 
                         idx = num_obs * seq_idx + obs_idx
-                        x_i, retrieval_mode_logits_i, retrieval_ref_logits_i = (
+                        (
+                            x_i,
+                            retrieval_mode_logits_i,
+                            retrieval_ref_logits_i,
+                            latent_proto_query_logits_i,
+                            latent_revisit_logits_i,
+                        ) = (
                             self.sam2_forward_with_memory(
                                 self.sam2, idx, num_img, feat_sizes
                             )
@@ -1143,6 +1291,10 @@ class MVT_SAM2_Single(nn.Module):
                             retrieval_mode_logits_.append(retrieval_mode_logits_i)
                         if retrieval_ref_logits_i is not None:
                             retrieval_ref_logits_.append(retrieval_ref_logits_i)
+                        if latent_proto_query_logits_i is not None:
+                            latent_proto_query_logits_.append(latent_proto_query_logits_i)
+                        if latent_revisit_logits_i is not None:
+                            latent_revisit_logits_.append(latent_revisit_logits_i)
 
                         if self.cvx_up:
                             with torch.cuda.amp.autocast(enabled=False):
@@ -1202,6 +1354,16 @@ class MVT_SAM2_Single(nn.Module):
                     if retrieval_ref_logits_
                     else None
                 )
+                latent_proto_query_logits = (
+                    torch.cat(latent_proto_query_logits_, dim=0)
+                    if latent_proto_query_logits_
+                    else None
+                )
+                latent_revisit_logits = (
+                    torch.cat(latent_revisit_logits_, dim=0)
+                    if latent_revisit_logits_
+                    else None
+                )
                 bs = bs_
 
 
@@ -1209,7 +1371,13 @@ class MVT_SAM2_Single(nn.Module):
 
             else:
                 with torch.cuda.amp.autocast(enabled=True):
-                    x, retrieval_mode_logits, retrieval_ref_logits = (
+                    (
+                        x,
+                        retrieval_mode_logits,
+                        retrieval_ref_logits,
+                        latent_proto_query_logits,
+                        latent_revisit_logits,
+                    ) = (
                         self.sam2_forward_with_memory(self.sam2, 0, num_img, feat_sizes)
                     )
                 if self.cvx_up:
@@ -1378,6 +1546,14 @@ class MVT_SAM2_Single(nn.Module):
             out["retrieval_mode_logits"] = retrieval_mode_logits.unsqueeze(1)
         if retrieval_ref_logits is not None:
             out["retrieval_ref_logits"] = retrieval_ref_logits.unsqueeze(1)
+        if latent_proto_query_logits is not None:
+            out["latent_proto_query_logits"] = latent_proto_query_logits.unsqueeze(1)
+        if latent_revisit_logits is not None:
+            out["latent_revisit_logits"] = latent_revisit_logits.unsqueeze(1)
+        if self.latent_proto_write_logits_runtime:
+            out["latent_proto_write_logits"] = torch.cat(
+                self.latent_proto_write_logits_runtime, dim=0
+            ).unsqueeze(1)
 
         out.update({"trans": trans})
 

@@ -926,9 +926,15 @@ class UniformReplayBuffer_temporal(ReplayBuffer):
                         try:
                             element_array[batch_element] = (
                                 store[element.name][state_index])
-                        except:
-                            import IPython
-                            IPython.embed()
+                        except KeyError as exc:
+                            available = len(store[element.name]) if hasattr(
+                                store[element.name], "__len__"
+                            ) else "unknown"
+                            raise RuntimeError(
+                                f"Replay store miss for element={element.name} "
+                                f"state_index={state_index} available_len={available} "
+                                f"disk_saving={self._disk_saving}"
+                            ) from exc
 
         if pack_in_dict:
             batch_arrays = self.unpack_transition(
@@ -1039,4 +1045,3 @@ class UniformReplayBuffer_temporal(ReplayBuffer):
 
     def init_enumeratation(self):
         self._enumeration_cursor = 0
-

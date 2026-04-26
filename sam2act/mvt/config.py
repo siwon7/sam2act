@@ -68,6 +68,11 @@ _C.graph_retrieval_enabled = False
 _C.graph_retrieval_num_classes = 0
 _C.graph_retrieval_hidden_dim = 128
 _C.graph_retrieval_bias_scale = 0.0
+_C.latent_proto_enabled = False
+_C.latent_proto_num_prototypes = 8
+_C.latent_proto_hidden_dim = 128
+_C.latent_proto_bias_scale = 0.0
+_C.latent_proto_use_text = True
 
 _C.sam2_config = '/configs/sam2.1/sam2.1_hiera_b+'
 _C.sam2_ckpt = './mvt/sam2_train/checkpoints/sam2.1_hiera_base_plus.pt'

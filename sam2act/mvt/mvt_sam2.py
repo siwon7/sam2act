@@ -107,6 +107,11 @@ class MVT_SAM2(nn.Module):
         graph_retrieval_num_classes=0,
         graph_retrieval_hidden_dim=128,
         graph_retrieval_bias_scale=0.0,
+        latent_proto_enabled=False,
+        latent_proto_num_prototypes=8,
+        latent_proto_hidden_dim=128,
+        latent_proto_bias_scale=0.0,
+        latent_proto_use_text=True,
         renderer_device="cuda:0",
     ):
         """MultiView Transfomer
@@ -197,6 +202,11 @@ class MVT_SAM2(nn.Module):
         self.graph_retrieval_num_classes = graph_retrieval_num_classes
         self.graph_retrieval_hidden_dim = graph_retrieval_hidden_dim
         self.graph_retrieval_bias_scale = graph_retrieval_bias_scale
+        self.latent_proto_enabled = latent_proto_enabled
+        self.latent_proto_num_prototypes = latent_proto_num_prototypes
+        self.latent_proto_hidden_dim = latent_proto_hidden_dim
+        self.latent_proto_bias_scale = latent_proto_bias_scale
+        self.latent_proto_use_text = latent_proto_use_text
 
         if self.ifSAM2:
             # sam2 = build_sam2_custom(self.sam2_config, self.sam2_ckpt, device="cuda", image_size=self.img_size if not self.resize_rgb else 256) #, num_maskmem=self.num_maskmem)
@@ -245,6 +255,7 @@ class MVT_SAM2(nn.Module):
                         and "up0" not in name
                         and "graph_node" not in name
                         and "graph_retrieval" not in name
+                        and "latent_proto" not in name
                     ):
                         param.requires_grad = False
 
@@ -262,6 +273,7 @@ class MVT_SAM2(nn.Module):
                             "sam" not in name
                             and "graph_node" not in name
                             and "graph_retrieval" not in name
+                            and "latent_proto" not in name
                         ):
                             param.requires_grad = False
 

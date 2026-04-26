@@ -8,6 +8,7 @@ import tqdm
 import random
 import yaml
 import argparse
+import sys
 
 from collections import defaultdict
 from contextlib import redirect_stdout
@@ -19,6 +20,10 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["BITSANDBYTES_NOWELCOME"] = "1"
+
+_LOCAL_YARR = os.path.join(os.path.dirname(__file__), "libs", "YARR")
+if _LOCAL_YARR not in sys.path:
+    sys.path.insert(0, _LOCAL_YARR)
 
 import config as exp_cfg_mod
 import sam2act.models.sam2act_agent as sam2act_agent
@@ -288,8 +293,16 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
         assert mvt_cfg.graph_retrieval_enabled, (
             "mvt.graph_retrieval_enabled must be True when graph retrieval losses are enabled"
         )
-        assert mvt_cfg.graph_retrieval_num_classes > 0, (
-            "mvt.graph_retrieval_num_classes must be > 0 when graph retrieval losses are enabled"
+    if (
+        exp_cfg.peract.latent_revisit_loss_weight > 0.0
+        or exp_cfg.peract.latent_proto_align_loss_weight > 0.0
+        or exp_cfg.peract.latent_proto_usage_loss_weight > 0.0
+    ):
+        assert mvt_cfg.latent_proto_enabled, (
+            "mvt.latent_proto_enabled must be True when latent prototype losses are enabled"
+        )
+        assert mvt_cfg.latent_proto_num_prototypes > 0, (
+            "mvt.latent_proto_num_prototypes must be > 0 when latent prototype losses are enabled"
         )
     mvt_cfg.freeze()
 
