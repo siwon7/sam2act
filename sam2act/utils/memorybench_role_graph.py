@@ -15,6 +15,8 @@ PUT_BLOCK_BACK_ROLE_NAMES: List[str] = [
     "button_low",
 ]
 
+PUT_BLOCK_BACK_PERSISTENT_ANCHOR_ROLE_IDS = {0, 1}
+
 
 _PUT_BLOCK_BACK_ROLE_SEQUENCE: List[int] = [
     0,  # 0
@@ -108,3 +110,15 @@ def get_memorybench_role_graph_targets(
     role_ref_mask = np.zeros(len(PUT_BLOCK_BACK_ROLE_NAMES), dtype=np.float32)
     anchor_use_label = 0
     return role_label, visit_mode_label, role_ref_valid, role_ref_mask, anchor_use_label
+
+
+def should_store_persistent_anchor(role_label: int, num_role_classes: int) -> bool:
+    """Return whether a grouped role should enter the persistent anchor bank.
+
+    The current transition-pointer branch is only tuned for the 6-role
+    `put_block_back` grouping, where the persistent anchors should keep the
+    initial slot prototypes.
+    """
+    if num_role_classes == len(PUT_BLOCK_BACK_ROLE_NAMES):
+        return role_label in PUT_BLOCK_BACK_PERSISTENT_ANCHOR_ROLE_IDS
+    return False

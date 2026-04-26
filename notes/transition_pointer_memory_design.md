@@ -89,6 +89,11 @@ It only activates for the late return steps:
 
 This avoids overusing anchors on every revisit.
 
+Additionally, the persistent anchor bank is now restricted to the
+`initial_slot_*` roles for `put_block_back`.
+We do **not** keep `center_*` or `button_*` prototypes in the persistent anchor
+bank, because they dilute the final return signal.
+
 ## Model Changes
 
 ### 1. Visit-Mode Head
@@ -101,21 +106,26 @@ It predicts whether the current step should be treated as:
 - a new target prototype
 - or a revisit step
 
-### 2. Revisit-Gated Memory Bias
+### 2. Late-Phase-Gated Memory Bias
 
-The existing grouped-role additive memory bias is now multiplied by the
-predicted revisit probability:
+The grouped-role additive memory bias originally used the predicted revisit
+probability as its gate.
 
-- on new steps, the graph bias should stay weak
-- on revisit steps, the graph bias should matter more
+That was too broad, because not every revisit is memory-critical.
+The current version gates the retrieval bias by the predicted probability of
+the **late return phase** instead:
 
-This avoids forcing retrieval logic onto the very first exploratory steps.
+- on early and interaction-heavy steps, graph bias stays weak
+- on late return steps, role-ref and anchor bias matter more
+
+This matches the observed structure better than a generic revisit gate.
 
 ### 3. Prototype-First Anchor Write
 
 Persistent anchors are written once per role, not once per early timestep.
 
 This makes the anchor bank prototype-centric rather than strictly temporal.
+For `put_block_back`, the bank is also narrowed to the initial-slot roles only.
 
 ## Losses
 

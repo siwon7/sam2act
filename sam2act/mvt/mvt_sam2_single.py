@@ -24,6 +24,7 @@ from sam2act.mvt.attn import (
     act_layer
 )
 from sam2act.mvt.raft_utils import ConvexUpSample
+from sam2act.utils.memorybench_role_graph import should_store_persistent_anchor
 
 
 
@@ -690,6 +691,7 @@ class MVT_SAM2_Single(nn.Module):
         self,
         memory_entries,
         visit_mode_logits,
+        phase_logits,
         role_ref_logits,
         anchor_use_logits,
         device,
@@ -699,6 +701,9 @@ class MVT_SAM2_Single(nn.Module):
             return None
 
         revisit_prob = torch.sigmoid(visit_mode_logits).view(-1)[0]
+        late_phase_prob = revisit_prob.new_tensor(1.0)
+        if phase_logits is not None and phase_logits.shape[-1] > 0:
+            late_phase_prob = torch.softmax(phase_logits.view(-1), dim=0)[-1]
         role_ref_probs = torch.sigmoid(role_ref_logits).view(-1)
         anchor_use_prob = torch.sigmoid(anchor_use_logits).view(-1)[0]
         role_scale = self.role_graph_bias_scale
@@ -710,9 +715,9 @@ class MVT_SAM2_Single(nn.Module):
             role_tag = int(entry["role_tag"])
             entry_bias = torch.zeros((), device=device)
             if 0 <= role_tag < role_ref_probs.shape[0]:
-                entry_bias = entry_bias + revisit_prob * role_scale * (2.0 * role_ref_probs[role_tag] - 1.0)
+                entry_bias = entry_bias + late_phase_prob * role_scale * (2.0 * role_ref_probs[role_tag] - 1.0)
             if entry["is_anchor"]:
-                entry_bias = entry_bias + revisit_prob * anchor_scale * (2.0 * anchor_use_prob - 1.0)
+                entry_bias = entry_bias + late_phase_prob * anchor_scale * (2.0 * anchor_use_prob - 1.0)
             token_biases.append(entry_bias.repeat(entry_len))
 
         if not token_biases:
@@ -878,6 +883,7 @@ class MVT_SAM2_Single(nn.Module):
                     attn_bias = self._build_memory_attn_bias(
                         memory_entries=memory_entries,
                         visit_mode_logits=role_query_outputs["visit_mode_logits"],
+                        phase_logits=role_query_outputs["phase_logits"],
                         role_ref_logits=role_query_outputs["role_ref_logits"],
                         anchor_use_logits=role_query_outputs["anchor_use_logits"],
                         device=memory_fused.device,
@@ -975,7 +981,12 @@ class MVT_SAM2_Single(nn.Module):
             if self.persistent_anchor_enabled:
                 anchor_bank = self.anchor_memory_bank_multiview[view_idx]
                 anchor_tags = self.anchor_role_tags_multiview[view_idx]
-                if role_label_value not in anchor_bank:
+                if (
+                    should_store_persistent_anchor(
+                        role_label_value, self.role_graph_num_classes
+                    )
+                    and role_label_value not in anchor_bank
+                ):
                     anchor_bank[role_label_value] = [memory, memory_pos]
                     anchor_tags[role_label_value] = role_label_value
 

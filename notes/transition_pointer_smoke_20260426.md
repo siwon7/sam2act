@@ -108,3 +108,36 @@ For the longer runs, the most important indicators are:
 1. whether `visit_mode_acc` rises above the smoke level
 2. whether `role_ref_top3_acc` remains high without hurting `trans_loss`
 3. whether `5ep` smoke rises above `0.0`
+
+## Follow-Up Lategate Smoke
+
+The first smoke suggested the revisit gate was still too broad, so the branch
+was tightened in two ways:
+
+- retrieval bias is gated by predicted late-phase probability
+- persistent anchors are restricted to `initial_slot_*` roles only
+
+Run:
+
+- `sam2act_pbb_transition_pointer_lategate_smoke_20260426`
+
+Result:
+
+- `put_block_back = 0.0`
+- episode length `25`
+
+Train summary:
+
+- `trans_loss = 5.3194`
+- `phase_aux_loss = 9.2904`
+- `role_graph_loss = 7.8892`
+- `visit_mode_loss = 2.0202`
+- `visit_mode_acc = 0.5583`
+- `role_ref_top3_acc = 1.0`
+
+Interpretation:
+
+- the tighter gating improved the auxiliary behavior numerically
+- rollout still stayed at `0.0`
+- next longer runs should remove `role_graph` and `visit_mode` losses and keep
+  only `phase + role_ref`
