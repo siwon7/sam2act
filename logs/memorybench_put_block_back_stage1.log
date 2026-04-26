@@ -1,0 +1,35 @@
+W0404 04:53:49.667000 1236776 site-packages/torch/distributed/run.py:851] 
+W0404 04:53:49.667000 1236776 site-packages/torch/distributed/run.py:851] *****************************************
+W0404 04:53:49.667000 1236776 site-packages/torch/distributed/run.py:851] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0404 04:53:49.667000 1236776 site-packages/torch/distributed/run.py:851] *****************************************
+Running DDP on rank 3.
+Running DDP on rank 1.
+Running DDP on rank 2.
+Running DDP on rank 0.
+dict(exp_cfg)={'agent': 'our', 'tasks': 'put_block_back', 'exp_id': 'sam2act', 'resume': '', 'bs': 8, 'epochs': 90, 'num_workers': 5, 'sample_distribution_mode': 'task_uniform', 'train_iter': 160000, 'exp_name': 'memorybench_put_block_back', 'demo': 100, 'wandb': False, 'peract': CfgNode({'lambda_weight_l2': 0.0001, 'lr': 0.0004, 'optimizer_type': 'lamb', 'warmup_steps': 2000, 'lr_cos_dec': True, 'add_rgc_loss': True, 'num_rotation_classes': 72, 'amp': True, 'bnb': True, 'transform_augmentation': True, 'transform_augmentation_xyz': [0.125, 0.125, 0.125], 'transform_augmentation_rpy': [0.0, 0.0, 45.0], 'same_trans_aug_per_seq': False}), 'rvt': CfgNode({'gt_hm_sigma': 1.5, 'img_aug': 0.0, 'place_with_mean': False, 'move_pc_in_bound': True}), 'peract_official': CfgNode({'cfg_path': 'configs/peract_official_config.yaml'})}
+Training on 1 tasks: ['put_block_back']
+[Info] Replay dataset already exists in the disk: replay_temporal_memory/replay_train/put_block_back
+/home/cv25/miniconda3/envs/sam2act5090/lib/python3.10/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+[rank0]:[W404 04:53:57.892379403 ProcessGroupNCCL.cpp:5188] Guessing device ID based on global rank. This can cause a hang if rank to GPU mapping is heterogeneous. You can specify device_id in init_process_group()
+Created Dataset. Time Cost: 0.031526211897532144 minutes
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+ImageEncoder's parameter size: 266.05517578125MB
+ImageEncoder's trainable parameter size: 2.43359375MB
+ImageEncoder's parameter num: 69.744768M
+ImageEncoder's trainable parameter num: 0.637952M
+MVT_SAM2's parameter size: 571.2547302246094MB
+MVT_SAM2's trainable parameter size: 279.01717376708984MB
+MVT_SAM2's parameter num: 149.751M
+MVT_SAM2's trainable parameter num: 73.142678M
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+Using 8-Bit Optimizer
+Using 8-Bit OptimizerUsing 8-Bit Optimizer
+
+Using 8-Bit Optimizer
+resume from checkpoint
+Recovering model and checkpoint from runs/sam2act_memorybench_put_block_back/model_last.pth, model epoch: 89
+Start training ...
+[Finish]

@@ -1,0 +1,184 @@
+Running DDP on rank 3.
+Running DDP on rank 1.
+Running DDP on rank 2.
+Running DDP on rank 0.
+dict(exp_cfg)={'agent': 'our', 'tasks': 'put_block_back', 'exp_id': 'sam2act', 'resume': '', 'bs': 13, 'epochs': 20, 'num_workers': 5, 'sample_distribution_mode': 'demo_uniform_temporal', 'train_iter': 160000, 'exp_name': 'memorybench_put_block_back_freshdebug_fix_mem12_20260409', 'demo': 100, 'wandb': False, 'peract': CfgNode({'lambda_weight_l2': 0.0001, 'lr': 6.500000000000001e-05, 'optimizer_type': 'lamb', 'warmup_steps': 2000, 'lr_cos_dec': True, 'add_rgc_loss': True, 'num_rotation_classes': 72, 'amp': True, 'bnb': True, 'transform_augmentation': True, 'transform_augmentation_xyz': [0.125, 0.125, 0.125], 'transform_augmentation_rpy': [0.0, 0.0, 45.0], 'same_trans_aug_per_seq': False}), 'rvt': CfgNode({'gt_hm_sigma': 1.5, 'img_aug': 0.0, 'place_with_mean': False, 'move_pc_in_bound': True}), 'peract_official': CfgNode({'cfg_path': 'configs/peract_official_config.yaml'})}
+Training on 1 tasks: ['put_block_back']
+[Info] Replay dataset already exists in the disk: replay_temporal_memory/replay_train/put_block_back
+/home/cv25/miniconda3/envs/sam2act5090/lib/python3.10/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+[rank0]:[W409 12:04:28.275127365 ProcessGroupNCCL.cpp:5188] Guessing device ID based on global rank. This can cause a hang if rank to GPU mapping is heterogeneous. You can specify device_id in init_process_group()
+cv25:3984101:3984101 [0] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+cv25:3984101:3984101 [0] NCCL INFO Bootstrap: Using eno1:10.150.20.249<0>
+cv25:3984101:3984101 [0] NCCL INFO cudaDriverVersion 13000
+cv25:3984101:3984101 [0] NCCL INFO NCCL version 2.28.9+cuda12.9
+cv25:3984101:3984101 [0] NCCL INFO Comm config Blocking set to 1
+cv25:3984101:3984101 [0] NCCL INFO NET/Plugin: Could not find: libnccl-net.so
+cv25:3984101:3984101 [0] NCCL INFO Failed to open libibverbs.so[.1]
+cv25:3984101:3984101 [0] NCCL INFO transport/net_ib.cc:852 -> 3
+cv25:3984101:3984101 [0] NCCL INFO Failed to initialize NET plugin IB
+cv25:3984101:3984101 [0] NCCL INFO NET/Socket : Using [0]eno1:10.150.20.249<0> [1]wg0:10.49.0.88<0>
+cv25:3984101:3984101 [0] NCCL INFO Initialized NET plugin Socket
+cv25:3984101:3984101 [0] NCCL INFO Assigned NET plugin Socket to comm
+cv25:3984101:3984101 [0] NCCL INFO Using network Socket
+cv25:3984101:3984101 [0] NCCL INFO ncclCommInitRankConfig comm 0x5704c2ae0e80 rank 0 nranks 4 cudaDev 0 nvmlDev 0 busId 1000 commId 0xfe10a3218d44942c - Init START
+cv25:3984102:3984102 [1] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+cv25:3984102:3984102 [1] NCCL INFO cudaDriverVersion 13000
+cv25:3984102:3984102 [1] NCCL INFO Bootstrap: Using eno1:10.150.20.249<0>
+cv25:3984102:3984102 [1] NCCL INFO NCCL version 2.28.9+cuda12.9
+cv25:3984103:3984103 [2] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+cv25:3984103:3984103 [2] NCCL INFO cudaDriverVersion 13000
+cv25:3984102:3984102 [1] NCCL INFO Comm config Blocking set to 1
+cv25:3984103:3984103 [2] NCCL INFO Bootstrap: Using eno1:10.150.20.249<0>
+cv25:3984103:3984103 [2] NCCL INFO NCCL version 2.28.9+cuda12.9
+cv25:3984103:3984103 [2] NCCL INFO Comm config Blocking set to 1
+cv25:3984104:3984104 [3] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+cv25:3984104:3984104 [3] NCCL INFO cudaDriverVersion 13000
+cv25:3984104:3984104 [3] NCCL INFO Bootstrap: Using eno1:10.150.20.249<0>
+cv25:3984104:3984104 [3] NCCL INFO NCCL version 2.28.9+cuda12.9
+cv25:3984104:3984104 [3] NCCL INFO Comm config Blocking set to 1
+cv25:3984102:3984102 [1] NCCL INFO NET/Plugin: Could not find: libnccl-net.so
+cv25:3984102:3984102 [1] NCCL INFO Failed to open libibverbs.so[.1]
+cv25:3984102:3984102 [1] NCCL INFO transport/net_ib.cc:852 -> 3
+cv25:3984102:3984102 [1] NCCL INFO Failed to initialize NET plugin IB
+cv25:3984102:3984102 [1] NCCL INFO NET/Socket : Using [0]eno1:10.150.20.249<0> [1]wg0:10.49.0.88<0>
+cv25:3984102:3984102 [1] NCCL INFO Initialized NET plugin Socket
+cv25:3984102:3984102 [1] NCCL INFO Assigned NET plugin Socket to comm
+cv25:3984102:3984102 [1] NCCL INFO Using network Socket
+cv25:3984102:3984102 [1] NCCL INFO ncclCommInitRankConfig comm 0x56748c8e3f40 rank 1 nranks 4 cudaDev 1 nvmlDev 1 busId 41000 commId 0xfe10a3218d44942c - Init START
+cv25:3984104:3984104 [3] NCCL INFO NET/Plugin: Could not find: libnccl-net.so
+cv25:3984104:3984104 [3] NCCL INFO Failed to open libibverbs.so[.1]
+cv25:3984104:3984104 [3] NCCL INFO transport/net_ib.cc:852 -> 3
+cv25:3984104:3984104 [3] NCCL INFO Failed to initialize NET plugin IB
+cv25:3984103:3984103 [2] NCCL INFO NET/Plugin: Could not find: libnccl-net.so
+cv25:3984103:3984103 [2] NCCL INFO Failed to open libibverbs.so[.1]
+cv25:3984103:3984103 [2] NCCL INFO transport/net_ib.cc:852 -> 3
+cv25:3984103:3984103 [2] NCCL INFO Failed to initialize NET plugin IB
+cv25:3984104:3984104 [3] NCCL INFO NET/Socket : Using [0]eno1:10.150.20.249<0> [1]wg0:10.49.0.88<0>
+cv25:3984104:3984104 [3] NCCL INFO Initialized NET plugin Socket
+cv25:3984104:3984104 [3] NCCL INFO Assigned NET plugin Socket to comm
+cv25:3984104:3984104 [3] NCCL INFO Using network Socket
+cv25:3984103:3984103 [2] NCCL INFO NET/Socket : Using [0]eno1:10.150.20.249<0> [1]wg0:10.49.0.88<0>
+cv25:3984103:3984103 [2] NCCL INFO Initialized NET plugin Socket
+cv25:3984103:3984103 [2] NCCL INFO Assigned NET plugin Socket to comm
+cv25:3984103:3984103 [2] NCCL INFO Using network Socket
+cv25:3984104:3984104 [3] NCCL INFO ncclCommInitRankConfig comm 0x583d9c9d5b40 rank 3 nranks 4 cudaDev 3 nvmlDev 3 busId 82000 commId 0xfe10a3218d44942c - Init START
+cv25:3984103:3984103 [2] NCCL INFO ncclCommInitRankConfig comm 0x6164f171d5b0 rank 2 nranks 4 cudaDev 2 nvmlDev 2 busId 81000 commId 0xfe10a3218d44942c - Init START
+cv25:3984101:3984101 [0] NCCL INFO RAS client listening socket at 127.0.0.1<28028>
+cv25:3984102:3984102 [1] NCCL INFO RAS client listening socket at 127.0.0.1<28028>
+cv25:3984103:3984103 [2] NCCL INFO RAS client listening socket at 127.0.0.1<28028>
+cv25:3984104:3984104 [3] NCCL INFO RAS client listening socket at 127.0.0.1<28028>
+cv25:3984102:3984102 [1] NCCL INFO Bootstrap timings total 0.008378 (create 0.000028, send 0.000091, recv 0.007806, ring 0.000258, delay 0.000001)
+cv25:3984103:3984103 [2] NCCL INFO Bootstrap timings total 0.000905 (create 0.000020, send 0.000068, recv 0.000499, ring 0.000102, delay 0.000000)
+cv25:3984101:3984101 [0] NCCL INFO Bootstrap timings total 0.207680 (create 0.000029, send 0.000114, recv 0.199517, ring 0.000393, delay 0.000000)
+cv25:3984104:3984104 [3] NCCL INFO Bootstrap timings total 0.000969 (create 0.000022, send 0.000086, recv 0.000207, ring 0.000061, delay 0.000000)
+cv25:3984101:3984101 [0] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 0 is empty, ignoring. (GPU affinity =  ; CPU affinity = 0-47).
+cv25:3984101:3984101 [0] NCCL INFO NVLS multicast support is not available on dev 0 (NVLS_NCHANNELS 0)
+cv25:3984103:3984103 [2] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 2 is empty, ignoring. (GPU affinity =  ; CPU affinity = 0-47).
+cv25:3984103:3984103 [2] NCCL INFO NVLS multicast support is not available on dev 2 (NVLS_NCHANNELS 0)
+cv25:3984102:3984102 [1] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 1 is empty, ignoring. (GPU affinity =  ; CPU affinity = 0-47).
+cv25:3984102:3984102 [1] NCCL INFO NVLS multicast support is not available on dev 1 (NVLS_NCHANNELS 0)
+cv25:3984104:3984104 [3] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 3 is empty, ignoring. (GPU affinity =  ; CPU affinity = 0-47).
+cv25:3984104:3984104 [3] NCCL INFO NVLS multicast support is not available on dev 3 (NVLS_NCHANNELS 0)
+cv25:3984102:3984102 [1] NCCL INFO comm 0x56748c8e3f40 rank 1 nRanks 4 nNodes 1 localRanks 4 localRank 1 MNNVL 0
+cv25:3984101:3984101 [0] NCCL INFO comm 0x5704c2ae0e80 rank 0 nRanks 4 nNodes 1 localRanks 4 localRank 0 MNNVL 0
+cv25:3984102:3984102 [1] NCCL INFO Trees [0] 2/-1/-1->1->0 [1] 2/-1/-1->1->0
+cv25:3984104:3984104 [3] NCCL INFO comm 0x583d9c9d5b40 rank 3 nRanks 4 nNodes 1 localRanks 4 localRank 3 MNNVL 0
+cv25:3984101:3984101 [0] NCCL INFO Channel 00/02 : 0 1 2 3
+cv25:3984102:3984102 [1] NCCL INFO P2P Chunksize set to 131072
+cv25:3984103:3984103 [2] NCCL INFO comm 0x6164f171d5b0 rank 2 nRanks 4 nNodes 1 localRanks 4 localRank 2 MNNVL 0
+cv25:3984101:3984101 [0] NCCL INFO Channel 01/02 : 0 1 2 3
+cv25:3984101:3984101 [0] NCCL INFO Trees [0] 1/-1/-1->0->-1 [1] 1/-1/-1->0->-1
+cv25:3984101:3984101 [0] NCCL INFO P2P Chunksize set to 131072
+cv25:3984104:3984104 [3] NCCL INFO Trees [0] -1/-1/-1->3->2 [1] -1/-1/-1->3->2
+cv25:3984103:3984103 [2] NCCL INFO Trees [0] 3/-1/-1->2->1 [1] 3/-1/-1->2->1
+cv25:3984104:3984104 [3] NCCL INFO P2P Chunksize set to 131072
+cv25:3984103:3984103 [2] NCCL INFO P2P Chunksize set to 131072
+cv25:3984104:3984104 [3] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+cv25:3984104:3984104 [3] NCCL INFO Check P2P Type isAllDirectP2p 0 directMode 0 isAllCudaP2p 0
+cv25:3984102:3984102 [1] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+cv25:3984103:3984103 [2] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+cv25:3984102:3984102 [1] NCCL INFO Check P2P Type isAllDirectP2p 0 directMode 0 isAllCudaP2p 0
+cv25:3984103:3984103 [2] NCCL INFO Check P2P Type isAllDirectP2p 0 directMode 0 isAllCudaP2p 0
+cv25:3984101:3984101 [0] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+cv25:3984101:3984101 [0] NCCL INFO Check P2P Type isAllDirectP2p 0 directMode 0 isAllCudaP2p 0
+cv25:3984104:3984299 [0] NCCL INFO [Proxy Service] Device 3 CPU core 46
+cv25:3984102:3984304 [0] NCCL INFO [Proxy Service UDS] Device 1 CPU core 14
+cv25:3984103:3984303 [0] NCCL INFO [Proxy Service] Device 2 CPU core 8
+cv25:3984104:3984300 [0] NCCL INFO [Proxy Service UDS] Device 3 CPU core 8
+cv25:3984101:3984302 [0] NCCL INFO [Proxy Service] Device 0 CPU core 46
+cv25:3984102:3984301 [0] NCCL INFO [Proxy Service] Device 1 CPU core 41
+cv25:3984101:3984305 [0] NCCL INFO [Proxy Service UDS] Device 0 CPU core 7
+cv25:3984103:3984306 [0] NCCL INFO [Proxy Service UDS] Device 2 CPU core 33
+cv25:3984104:3984104 [3] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+cv25:3984104:3984104 [3] NCCL INFO threadThresholds 8/8/64 | 32/8/64 | 512 | 512
+cv25:3984104:3984104 [3] NCCL INFO 2 coll channels, 2 collnet channels, 0 nvls channels, 2 p2p channels, 2 p2p channels per peer
+cv25:3984102:3984102 [1] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+cv25:3984102:3984102 [1] NCCL INFO threadThresholds 8/8/64 | 32/8/64 | 512 | 512
+cv25:3984102:3984102 [1] NCCL INFO 2 coll channels, 2 collnet channels, 0 nvls channels, 2 p2p channels, 2 p2p channels per peer
+cv25:3984103:3984103 [2] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+cv25:3984103:3984103 [2] NCCL INFO threadThresholds 8/8/64 | 32/8/64 | 512 | 512
+cv25:3984103:3984103 [2] NCCL INFO 2 coll channels, 2 collnet channels, 0 nvls channels, 2 p2p channels, 2 p2p channels per peer
+cv25:3984101:3984101 [0] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+cv25:3984101:3984101 [0] NCCL INFO threadThresholds 8/8/64 | 32/8/64 | 512 | 512
+cv25:3984101:3984101 [0] NCCL INFO 2 coll channels, 2 collnet channels, 0 nvls channels, 2 p2p channels, 2 p2p channels per peer
+cv25:3984101:3984101 [0] NCCL INFO CC Off, workFifoBytes 1048576
+cv25:3984104:3984104 [3] NCCL INFO ncclCommInitRankConfig comm 0x583d9c9d5b40 rank 3 nranks 4 cudaDev 3 nvmlDev 3 busId 82000 commId 0xfe10a3218d44942c - Init COMPLETE
+cv25:3984104:3984104 [3] NCCL INFO Init timings - ncclCommInitRankConfig: rank 3 nranks 4 total 0.19 (kernels 0.17, alloc 0.00, bootstrap 0.00, allgathers 0.00, topo 0.01, graphs 0.00, connections 0.00, rest 0.00)
+cv25:3984102:3984102 [1] NCCL INFO ncclCommInitRankConfig comm 0x56748c8e3f40 rank 1 nranks 4 cudaDev 1 nvmlDev 1 busId 41000 commId 0xfe10a3218d44942c - Init COMPLETE
+cv25:3984102:3984102 [1] NCCL INFO Init timings - ncclCommInitRankConfig: rank 1 nranks 4 total 0.20 (kernels 0.17, alloc 0.00, bootstrap 0.01, allgathers 0.00, topo 0.01, graphs 0.00, connections 0.00, rest 0.00)
+cv25:3984103:3984103 [2] NCCL INFO ncclCommInitRankConfig comm 0x6164f171d5b0 rank 2 nranks 4 cudaDev 2 nvmlDev 2 busId 81000 commId 0xfe10a3218d44942c - Init COMPLETE
+cv25:3984103:3984103 [2] NCCL INFO Init timings - ncclCommInitRankConfig: rank 2 nranks 4 total 0.20 (kernels 0.18, alloc 0.00, bootstrap 0.00, allgathers 0.00, topo 0.01, graphs 0.00, connections 0.00, rest 0.00)
+cv25:3984101:3984101 [0] NCCL INFO ncclCommInitRankConfig comm 0x5704c2ae0e80 rank 0 nranks 4 cudaDev 0 nvmlDev 0 busId 1000 commId 0xfe10a3218d44942c - Init COMPLETE
+cv25:3984101:3984101 [0] NCCL INFO Init timings - ncclCommInitRankConfig: rank 0 nranks 4 total 0.39 (kernels 0.16, alloc 0.01, bootstrap 0.21, allgathers 0.00, topo 0.01, graphs 0.00, connections 0.00, rest 0.00)
+cv25:3984101:3984101 [0] NCCL INFO Channel 00 : 0[0] -> 1[1] via SHM/direct/direct
+cv25:3984101:3984101 [0] NCCL INFO Channel 01 : 0[0] -> 1[1] via SHM/direct/direct
+cv25:3984102:3984102 [1] NCCL INFO Channel 00 : 1[1] -> 2[2] via SHM/direct/direct
+cv25:3984103:3984103 [2] NCCL INFO Channel 00 : 2[2] -> 3[3] via SHM/direct/direct
+cv25:3984104:3984104 [3] NCCL INFO Channel 00 : 3[3] -> 0[0] via SHM/direct/direct
+cv25:3984102:3984102 [1] NCCL INFO Channel 01 : 1[1] -> 2[2] via SHM/direct/direct
+cv25:3984104:3984104 [3] NCCL INFO Channel 01 : 3[3] -> 0[0] via SHM/direct/direct
+cv25:3984103:3984103 [2] NCCL INFO Channel 01 : 2[2] -> 3[3] via SHM/direct/direct
+cv25:3984102:3984102 [1] NCCL INFO Connected all rings, use ring PXN 0 GDR 1
+cv25:3984103:3984103 [2] NCCL INFO Connected all rings, use ring PXN 0 GDR 1
+cv25:3984101:3984101 [0] NCCL INFO Connected all rings, use ring PXN 0 GDR 1
+cv25:3984104:3984104 [3] NCCL INFO Connected all rings, use ring PXN 0 GDR 1
+Created Dataset. Time Cost: 0.034922091166178386 minutes
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+ImageEncoder's parameter size: 266.05517578125MB
+ImageEncoder's trainable parameter size: 0.0MB
+ImageEncoder's parameter num: 69.744768M
+ImageEncoder's trainable parameter num: 0.0M
+MVT_SAM2's parameter size: 571.2554626464844MB
+MVT_SAM2's trainable parameter size: 35.296443939208984MB
+MVT_SAM2's parameter num: 149.751192M
+MVT_SAM2's trainable parameter num: 9.252751M
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+Using 8-Bit Optimizer
+Using 8-Bit Optimizer
+Using 8-Bit Optimizer
+Using 8-Bit Optimizer
+resume from checkpoint
+Stage-two handoff: loading stage-one weights while keeping memory_attention, memory_encoder, and maskmem_tpos_enc fresh.
+WARNING: missing checkpoint keys (441): ['sam2.maskmem_tpos_enc', 'sam2.memory_attention.layers.0.self_attn.q_proj.weight', 'sam2.memory_attention.layers.0.self_attn.q_proj.bias', 'sam2.memory_attention.layers.0.self_attn.k_proj.weight', 'sam2.memory_attention.layers.0.self_attn.k_proj.bias', 'sam2.memory_attention.layers.0.self_attn.v_proj.weight', 'sam2.memory_attention.layers.0.self_attn.v_proj.bias', 'sam2.memory_attention.layers.0.self_attn.out_proj.weight', 'sam2.memory_attention.layers.0.self_attn.out_proj.bias', 'sam2.memory_attention.layers.0.cross_attn_image.q_proj.weight', 'sam2.memory_attention.layers.0.cross_attn_image.q_proj.bias', 'sam2.memory_attention.layers.0.cross_attn_image.k_proj.weight', 'sam2.memory_attention.layers.0.cross_attn_image.k_proj.bias', 'sam2.memory_attention.layers.0.cross_attn_image.v_proj.weight', 'sam2.memory_attention.layers.0.cross_attn_image.v_proj.bias', 'sam2.memory_attention.layers.0.cross_attn_image.out_proj.weight', 'sam2.memory_attention.layers.0.cross_attn_image.out_proj.bias', 'sam2.memory_attention.layers.0.linear1.weight', 'sam2.memory_attention.layers.0.linear1.bias', 'sam2.memory_attention.layers.0.linear2.weight']
+WARNING: missing checkpoint key prefixes: {mvt1.sam2.memory_attention: 106, mvt2.sam2.memory_attention: 106, sam2.memory_attention.layers: 104, mvt1.sam2.memory_encoder: 40, mvt2.sam2.memory_encoder: 40, sam2.memory_encoder.mask_downsampler: 18, sam2.memory_encoder.fuser: 18, sam2.memory_attention.norm: 2}
+WARNING: unexpected checkpoint keys (14): ['mvt1.task_embedding.weight', 'mvt1.task_memory_gate.0.weight', 'mvt1.task_memory_gate.0.bias', 'mvt1.task_local_event_router.0.weight', 'mvt1.task_local_event_router.0.bias', 'mvt1.event_write_router.0.weight', 'mvt1.event_write_router.0.bias', 'mvt2.task_embedding.weight', 'mvt2.task_memory_gate.0.weight', 'mvt2.task_memory_gate.0.bias', 'mvt2.task_local_event_router.0.weight', 'mvt2.task_local_event_router.0.bias', 'mvt2.event_write_router.0.weight', 'mvt2.event_write_router.0.bias']
+WARNING: unexpected checkpoint key prefixes: {mvt1.task_memory_gate.0: 2, mvt1.task_local_event_router.0: 2, mvt1.event_write_router.0: 2, mvt2.task_memory_gate.0: 2, mvt2.task_local_event_router.0: 2, mvt2.event_write_router.0: 2, mvt1.task_embedding.weight: 1, mvt2.task_embedding.weight: 1}
+WARNING: missing checkpoint keys (441): ['sam2.maskmem_tpos_enc', 'sam2.memory_attention.layers.0.self_attn.q_proj.weight', 'sam2.memory_attention.layers.0.self_attn.q_proj.bias', 'sam2.memory_attention.layers.0.self_attn.k_proj.weight', 'sam2.memory_attention.layers.0.self_attn.k_proj.bias', 'sam2.memory_attention.layers.0.self_attn.v_proj.weight', 'sam2.memory_attention.layers.0.self_attn.v_proj.bias', 'sam2.memory_attention.layers.0.self_attn.out_proj.weight', 'sam2.memory_attention.layers.0.self_attn.out_proj.bias', 'sam2.memory_attention.layers.0.cross_attn_image.q_proj.weight', 'sam2.memory_attention.layers.0.cross_attn_image.q_proj.bias', 'sam2.memory_attention.layers.0.cross_attn_image.k_proj.weight', 'sam2.memory_attention.layers.0.cross_attn_image.k_proj.bias', 'sam2.memory_attention.layers.0.cross_attn_image.v_proj.weight', 'sam2.memory_attention.layers.0.cross_attn_image.v_proj.bias', 'sam2.memory_attention.layers.0.cross_attn_image.out_proj.weight', 'sam2.memory_attention.layers.0.cross_attn_image.out_proj.bias', 'sam2.memory_attention.layers.0.linear1.weight', 'sam2.memory_attention.layers.0.linear1.bias', 'sam2.memory_attention.layers.0.linear2.weight']
+WARNING: missing checkpoint key prefixes: {mvt1.sam2.memory_attention: 106, mvt2.sam2.memory_attention: 106, sam2.memory_attention.layers: 104, mvt1.sam2.memory_encoder: 40, mvt2.sam2.memory_encoder: 40, sam2.memory_encoder.mask_downsampler: 18, sam2.memory_encoder.fuser: 18, sam2.memory_attention.norm: 2}
+WARNING: unexpected checkpoint keys (14): ['mvt1.task_embedding.weight', 'mvt1.task_memory_gate.0.weight', 'mvt1.task_memory_gate.0.bias', 'mvt1.task_local_event_router.0.weight', 'mvt1.task_local_event_router.0.bias', 'mvt1.event_write_router.0.weight', 'mvt1.event_write_router.0.bias', 'mvt2.task_embedding.weight', 'mvt2.task_memory_gate.0.weight', 'mvt2.task_memory_gate.0.bias', 'mvt2.task_local_event_router.0.weight', 'mvt2.task_local_event_router.0.bias', 'mvt2.event_write_router.0.weight', 'mvt2.event_write_router.0.bias']
+WARNING: unexpected checkpoint key prefixes: {mvt1.task_memory_gate.0: 2, mvt1.task_local_event_router.0: 2, mvt1.event_write_router.0: 2, mvt2.task_memory_gate.0: 2, mvt2.task_local_event_router.0: 2, mvt2.event_write_router.0: 2, mvt1.task_embedding.weight: 1, mvt2.task_embedding.weight: 1}
+WARNING: missing checkpoint keys (441): ['sam2.maskmem_tpos_enc', 'sam2.memory_attention.layers.0.self_attn.q_proj.weight', 'sam2.memory_attention.layers.0.self_attn.q_proj.bias', 'sam2.memory_attention.layers.0.self_attn.k_proj.weight', 'sam2.memory_attention.layers.0.self_attn.k_proj.bias', 'sam2.memory_attention.layers.0.self_attn.v_proj.weight', 'sam2.memory_attention.layers.0.self_attn.v_proj.bias', 'sam2.memory_attention.layers.0.self_attn.out_proj.weight', 'sam2.memory_attention.layers.0.self_attn.out_proj.bias', 'sam2.memory_attention.layers.0.cross_attn_image.q_proj.weight', 'sam2.memory_attention.layers.0.cross_attn_image.q_proj.bias', 'sam2.memory_attention.layers.0.cross_attn_image.k_proj.weight', 'sam2.memory_attention.layers.0.cross_attn_image.k_proj.bias', 'sam2.memory_attention.layers.0.cross_attn_image.v_proj.weight', 'sam2.memory_attention.layers.0.cross_attn_image.v_proj.bias', 'sam2.memory_attention.layers.0.cross_attn_image.out_proj.weight', 'sam2.memory_attention.layers.0.cross_attn_image.out_proj.bias', 'sam2.memory_attention.layers.0.linear1.weight', 'sam2.memory_attention.layers.0.linear1.bias', 'sam2.memory_attention.layers.0.linear2.weight']
+WARNING: missing checkpoint key prefixes: {mvt1.sam2.memory_attention: 106, mvt2.sam2.memory_attention: 106, sam2.memory_attention.layers: 104, mvt1.sam2.memory_encoder: 40, mvt2.sam2.memory_encoder: 40, sam2.memory_encoder.mask_downsampler: 18, sam2.memory_encoder.fuser: 18, sam2.memory_attention.norm: 2}
+WARNING: unexpected checkpoint keys (14): ['mvt1.task_embedding.weight', 'mvt1.task_memory_gate.0.weight', 'mvt1.task_memory_gate.0.bias', 'mvt1.task_local_event_router.0.weight', 'mvt1.task_local_event_router.0.bias', 'mvt1.event_write_router.0.weight', 'mvt1.event_write_router.0.bias', 'mvt2.task_embedding.weight', 'mvt2.task_memory_gate.0.weight', 'mvt2.task_memory_gate.0.bias', 'mvt2.task_local_event_router.0.weight', 'mvt2.task_local_event_router.0.bias', 'mvt2.event_write_router.0.weight', 'mvt2.event_write_router.0.bias']
+WARNING: unexpected checkpoint key prefixes: {mvt1.task_memory_gate.0: 2, mvt1.task_local_event_router.0: 2, mvt1.event_write_router.0: 2, mvt2.task_memory_gate.0: 2, mvt2.task_local_event_router.0: 2, mvt2.event_write_router.0: 2, mvt1.task_embedding.weight: 1, mvt2.task_embedding.weight: 1}
+WARNING: missing checkpoint keys (441): ['sam2.maskmem_tpos_enc', 'sam2.memory_attention.layers.0.self_attn.q_proj.weight', 'sam2.memory_attention.layers.0.self_attn.q_proj.bias', 'sam2.memory_attention.layers.0.self_attn.k_proj.weight', 'sam2.memory_attention.layers.0.self_attn.k_proj.bias', 'sam2.memory_attention.layers.0.self_attn.v_proj.weight', 'sam2.memory_attention.layers.0.self_attn.v_proj.bias', 'sam2.memory_attention.layers.0.self_attn.out_proj.weight', 'sam2.memory_attention.layers.0.self_attn.out_proj.bias', 'sam2.memory_attention.layers.0.cross_attn_image.q_proj.weight', 'sam2.memory_attention.layers.0.cross_attn_image.q_proj.bias', 'sam2.memory_attention.layers.0.cross_attn_image.k_proj.weight', 'sam2.memory_attention.layers.0.cross_attn_image.k_proj.bias', 'sam2.memory_attention.layers.0.cross_attn_image.v_proj.weight', 'sam2.memory_attention.layers.0.cross_attn_image.v_proj.bias', 'sam2.memory_attention.layers.0.cross_attn_image.out_proj.weight', 'sam2.memory_attention.layers.0.cross_attn_image.out_proj.bias', 'sam2.memory_attention.layers.0.linear1.weight', 'sam2.memory_attention.layers.0.linear1.bias', 'sam2.memory_attention.layers.0.linear2.weight']
+WARNING: missing checkpoint key prefixes: {mvt1.sam2.memory_attention: 106, mvt2.sam2.memory_attention: 106, sam2.memory_attention.layers: 104, mvt1.sam2.memory_encoder: 40, mvt2.sam2.memory_encoder: 40, sam2.memory_encoder.mask_downsampler: 18, sam2.memory_encoder.fuser: 18, sam2.memory_attention.norm: 2}
+WARNING: unexpected checkpoint keys (14): ['mvt1.task_embedding.weight', 'mvt1.task_memory_gate.0.weight', 'mvt1.task_memory_gate.0.bias', 'mvt1.task_local_event_router.0.weight', 'mvt1.task_local_event_router.0.bias', 'mvt1.event_write_router.0.weight', 'mvt1.event_write_router.0.bias', 'mvt2.task_embedding.weight', 'mvt2.task_memory_gate.0.weight', 'mvt2.task_memory_gate.0.bias', 'mvt2.task_local_event_router.0.weight', 'mvt2.task_local_event_router.0.bias', 'mvt2.event_write_router.0.weight', 'mvt2.event_write_router.0.bias']
+WARNING: unexpected checkpoint key prefixes: {mvt1.task_memory_gate.0: 2, mvt1.task_local_event_router.0: 2, mvt1.event_write_router.0: 2, mvt2.task_memory_gate.0: 2, mvt2.task_local_event_router.0: 2, mvt2.event_write_router.0: 2, mvt1.task_embedding.weight: 1, mvt2.task_embedding.weight: 1}
+Recovering model and checkpoint from runs/sam2act_memorybench_put_block_back_freshdebug_fix_mem12_20260409/model_last.pth
+Start training ...
+Rank [0], Epoch [0]: Training on train dataset
+  0%|          | 0/3076 [00:00<?, ?it/s]

@@ -1,0 +1,28 @@
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+ImageEncoder's parameter size: 266.05517578125MB
+ImageEncoder's trainable parameter size: 2.43359375MB
+ImageEncoder's parameter num: 69.744768M
+ImageEncoder's trainable parameter num: 0.637952M
+MVT_SAM2's parameter size: 571.2547302246094MB
+MVT_SAM2's trainable parameter size: 279.01717376708984MB
+MVT_SAM2's parameter num: 149.751M
+MVT_SAM2's trainable parameter num: 73.142678M
+Using 8-Bit Optimizer
+Agent Information
+<sam2act.models.sam2act_agent.SAM2Act_Agent object at 0x730258782fe0>
+Evaluating insert_onto_square_peg | Episode 0 | Score: 0.0 | Episode Length: 1 | Lang Goal: put the ring on the azure spoke
+[Evaluation] Finished insert_onto_square_peg | Final Score: 0.0
+
+Evaluating open_drawer | Episode 0 | Score: 0.0 | Episode Length: 1 | Lang Goal: open the top drawer
+[Evaluation] Finished open_drawer | Final Score: 0.0
+
+Evaluating turn_tap | Episode 0 | Score: 0.0 | Episode Length: 1 | Lang Goal: turn right tap
+[Evaluation] Finished turn_tap | Final Score: 0.0
+
+Evaluating stack_blocks | Episode 0 | Score: 0.0 | Episode Length: 1 | Lang Goal: stack 3 teal blocks
+[Evaluation] Finished stack_blocks | Final Score: 0.0
+
+[CoppeliaSim:loadinfo]   done.
+model runs/sam2act_rlbench/model_89.pth, scores [np.float64(0.0), np.float64(0.0), np.float64(0.0), np.float64(0.0)]
+save  {'insert_onto_square_peg': np.float64(0.0), 'open_drawer': np.float64(0.0), 'turn_tap': np.float64(0.0), 'stack_blocks': np.float64(0.0)}
+avg score is 0.0

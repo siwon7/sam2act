@@ -1,0 +1,59 @@
+=== 2026-04-22 14:01:33 KST ===
+task=put_block_back exp_name=mb_stage2_mem12_bs13_rerun_20260422 bs=13 lr=1.25e-06 epochs=20 num_maskmem=12 auto_eval_episodes=5 attn_episode=0
+W0422 14:01:34.291000 15550 site-packages/torch/distributed/run.py:851] 
+W0422 14:01:34.291000 15550 site-packages/torch/distributed/run.py:851] *****************************************
+W0422 14:01:34.291000 15550 site-packages/torch/distributed/run.py:851] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0422 14:01:34.291000 15550 site-packages/torch/distributed/run.py:851] *****************************************
+Running DDP on rank 1.
+Running DDP on rank 3.
+Running DDP on rank 2.
+Running DDP on rank 0.
+dict(exp_cfg)={'agent': 'our', 'tasks': 'put_block_back', 'exp_id': 'sam2act', 'resume': '', 'bs': 13, 'epochs': 20, 'num_workers': 5, 'sample_distribution_mode': 'demo_uniform_temporal', 'train_iter': 160000, 'exp_name': 'mb_stage2_mem12_bs13_rerun_20260422', 'demo': 100, 'wandb': False, 'peract': CfgNode({'lambda_weight_l2': 0.0001, 'lr': 6.500000000000001e-05, 'optimizer_type': 'lamb', 'warmup_steps': 2000, 'lr_cos_dec': True, 'add_rgc_loss': True, 'num_rotation_classes': 72, 'amp': True, 'bnb': True, 'transform_augmentation': True, 'transform_augmentation_xyz': [0.125, 0.125, 0.125], 'transform_augmentation_rpy': [0.0, 0.0, 45.0], 'same_trans_aug_per_seq': False}), 'rvt': CfgNode({'gt_hm_sigma': 1.5, 'img_aug': 0.0, 'place_with_mean': False, 'move_pc_in_bound': True}), 'peract_official': CfgNode({'cfg_path': 'configs/peract_official_config.yaml'})}
+Training on 1 tasks: ['put_block_back']
+[Info] Replay dataset already exists in the disk: replay_temporal_memory/replay_train/put_block_back
+/home/cv25/miniconda3/envs/sam2act5090/lib/python3.10/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+[rank0]:[W422 14:01:41.577970944 ProcessGroupNCCL.cpp:5188] Guessing device ID based on global rank. This can cause a hang if rank to GPU mapping is heterogeneous. You can specify device_id in init_process_group()
+Created Dataset. Time Cost: 0.030290452639261882 minutes
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+ImageEncoder's parameter size: 266.05517578125MB
+ImageEncoder's trainable parameter size: 0.0MB
+ImageEncoder's parameter num: 69.744768M
+ImageEncoder's trainable parameter num: 0.0M
+MVT_SAM2's parameter size: 571.2554626464844MB
+MVT_SAM2's trainable parameter size: 35.296443939208984MB
+MVT_SAM2's parameter num: 149.751192M
+MVT_SAM2's trainable parameter num: 9.252751M
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+Using 8-Bit Optimizer
+Using 8-Bit Optimizer
+resume from checkpoint
+Stage-two handoff: loading full stage-one weights, including memory_attention, memory_encoder, and maskmem_tpos_enc.
+Using 8-Bit Optimizer
+Using 8-Bit Optimizer
+WARNING: adapted sam2.maskmem_tpos_enc from checkpoint shape (9, 1, 1, 64) to model shape (12, 1, 1, 64) by prefix copy (9).
+WARNING: adapted mvt1.sam2.maskmem_tpos_enc from checkpoint shape (9, 1, 1, 64) to model shape (12, 1, 1, 64) by prefix copy (9).
+WARNING: adapted mvt2.sam2.maskmem_tpos_enc from checkpoint shape (9, 1, 1, 64) to model shape (12, 1, 1, 64) by prefix copy (9).
+WARNING: adapted sam2.maskmem_tpos_enc from checkpoint shape (9, 1, 1, 64) to model shape (12, 1, 1, 64) by prefix copy (9).
+WARNING: adapted sam2.maskmem_tpos_enc from checkpoint shape (9, 1, 1, 64) to model shape (12, 1, 1, 64) by prefix copy (9).
+WARNING: adapted mvt1.sam2.maskmem_tpos_enc from checkpoint shape (9, 1, 1, 64) to model shape (12, 1, 1, 64) by prefix copy (9).
+WARNING: adapted mvt1.sam2.maskmem_tpos_enc from checkpoint shape (9, 1, 1, 64) to model shape (12, 1, 1, 64) by prefix copy (9).
+WARNING: adapted mvt2.sam2.maskmem_tpos_enc from checkpoint shape (9, 1, 1, 64) to model shape (12, 1, 1, 64) by prefix copy (9).
+WARNING: adapted mvt2.sam2.maskmem_tpos_enc from checkpoint shape (9, 1, 1, 64) to model shape (12, 1, 1, 64) by prefix copy (9).
+WARNING: adapted sam2.maskmem_tpos_enc from checkpoint shape (9, 1, 1, 64) to model shape (12, 1, 1, 64) by prefix copy (9).
+WARNING: adapted mvt1.sam2.maskmem_tpos_enc from checkpoint shape (9, 1, 1, 64) to model shape (12, 1, 1, 64) by prefix copy (9).
+WARNING: adapted mvt2.sam2.maskmem_tpos_enc from checkpoint shape (9, 1, 1, 64) to model shape (12, 1, 1, 64) by prefix copy (9).
+WARNING: unexpected checkpoint keys (14): ['mvt1.task_embedding.weight', 'mvt1.task_memory_gate.0.weight', 'mvt1.task_memory_gate.0.bias', 'mvt1.task_local_event_router.0.weight', 'mvt1.task_local_event_router.0.bias', 'mvt1.event_write_router.0.weight', 'mvt1.event_write_router.0.bias', 'mvt2.task_embedding.weight', 'mvt2.task_memory_gate.0.weight', 'mvt2.task_memory_gate.0.bias', 'mvt2.task_local_event_router.0.weight', 'mvt2.task_local_event_router.0.bias', 'mvt2.event_write_router.0.weight', 'mvt2.event_write_router.0.bias']
+WARNING: unexpected checkpoint keys (14): ['mvt1.task_embedding.weight', 'mvt1.task_memory_gate.0.weight', 'mvt1.task_memory_gate.0.bias', 'mvt1.task_local_event_router.0.weight', 'mvt1.task_local_event_router.0.bias', 'mvt1.event_write_router.0.weight', 'mvt1.event_write_router.0.bias', 'mvt2.task_embedding.weight', 'mvt2.task_memory_gate.0.weight', 'mvt2.task_memory_gate.0.bias', 'mvt2.task_local_event_router.0.weight', 'mvt2.task_local_event_router.0.bias', 'mvt2.event_write_router.0.weight', 'mvt2.event_write_router.0.bias']
+WARNING: unexpected checkpoint key prefixes: {mvt1.task_memory_gate.0: 2, mvt1.task_local_event_router.0: 2, mvt1.event_write_router.0: 2, mvt2.task_memory_gate.0: 2, mvt2.task_local_event_router.0: 2, mvt2.event_write_router.0: 2, mvt1.task_embedding.weight: 1, mvt2.task_embedding.weight: 1}
+WARNING: unexpected checkpoint key prefixes: {mvt1.task_memory_gate.0: 2, mvt1.task_local_event_router.0: 2, mvt1.event_write_router.0: 2, mvt2.task_memory_gate.0: 2, mvt2.task_local_event_router.0: 2, mvt2.event_write_router.0: 2, mvt1.task_embedding.weight: 1, mvt2.task_embedding.weight: 1}
+WARNING: unexpected checkpoint keys (14): ['mvt1.task_embedding.weight', 'mvt1.task_memory_gate.0.weight', 'mvt1.task_memory_gate.0.bias', 'mvt1.task_local_event_router.0.weight', 'mvt1.task_local_event_router.0.bias', 'mvt1.event_write_router.0.weight', 'mvt1.event_write_router.0.bias', 'mvt2.task_embedding.weight', 'mvt2.task_memory_gate.0.weight', 'mvt2.task_memory_gate.0.bias', 'mvt2.task_local_event_router.0.weight', 'mvt2.task_local_event_router.0.bias', 'mvt2.event_write_router.0.weight', 'mvt2.event_write_router.0.bias']
+WARNING: unexpected checkpoint key prefixes: {mvt1.task_memory_gate.0: 2, mvt1.task_local_event_router.0: 2, mvt1.event_write_router.0: 2, mvt2.task_memory_gate.0: 2, mvt2.task_local_event_router.0: 2, mvt2.event_write_router.0: 2, mvt1.task_embedding.weight: 1, mvt2.task_embedding.weight: 1}
+WARNING: unexpected checkpoint keys (14): ['mvt1.task_embedding.weight', 'mvt1.task_memory_gate.0.weight', 'mvt1.task_memory_gate.0.bias', 'mvt1.task_local_event_router.0.weight', 'mvt1.task_local_event_router.0.bias', 'mvt1.event_write_router.0.weight', 'mvt1.event_write_router.0.bias', 'mvt2.task_embedding.weight', 'mvt2.task_memory_gate.0.weight', 'mvt2.task_memory_gate.0.bias', 'mvt2.task_local_event_router.0.weight', 'mvt2.task_local_event_router.0.bias', 'mvt2.event_write_router.0.weight', 'mvt2.event_write_router.0.bias']
+WARNING: unexpected checkpoint key prefixes: {mvt1.task_memory_gate.0: 2, mvt1.task_local_event_router.0: 2, mvt1.event_write_router.0: 2, mvt2.task_memory_gate.0: 2, mvt2.task_local_event_router.0: 2, mvt2.event_write_router.0: 2, mvt1.task_embedding.weight: 1, mvt2.task_embedding.weight: 1}
+Recovering model and checkpoint from runs/sam2act_mb_stage2_mem12_bs13_rerun_20260422/model_last.pth
+Start training ...
+Rank [0], Epoch [0]: Training on train dataset
+  0%|          | 0/3076 [00:00<?, ?it/s]

@@ -1,0 +1,9 @@
+export _SAM2ACT5090_OLD_PATH="$PATH"
+export _SAM2ACT5090_OLD_LD_LIBRARY_PATH="${LD_LIBRARY_PATH-}"
+export _SAM2ACT5090_OLD_CPATH="${CPATH-}"
+export COPPELIASIM_ROOT=/home/cv25/siwon/coppeliasim/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04
+export QT_QPA_PLATFORM_PLUGIN_PATH="$COPPELIASIM_ROOT"
+export CUDA_HOME=/home/cv25/miniconda3/envs/sam2act5090
+export PATH="$CUDA_HOME/bin:$PATH"
+export LD_LIBRARY_PATH="$CUDA_HOME/lib64:$CUDA_HOME/targets/x86_64-linux/lib:$COPPELIASIM_ROOT${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export CPATH="$CUDA_HOME/targets/x86_64-linux/include:$CUDA_HOME/include${CPATH:+:$CPATH}"

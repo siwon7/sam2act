@@ -1,0 +1,19 @@
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+MVT_SAM2's parameter size: 571.2549743652344MB
+MVT_SAM2's trainable parameter size: 35.295955657958984MB
+MVT_SAM2's parameter num: 149.751064M
+MVT_SAM2's trainable parameter num: 9.252623M
+Using 8-Bit Optimizer
+Agent Information
+<sam2act.models.sam2act_agent.SAM2Act_Agent object at 0x7728fe077ca0>
+Evaluating put_block_back | Episode 0 | Score: 0.0 | Episode Length: 25 | Lang Goal: move the block on the color patch to the center, then press the button, and finally move the block back to where it was placed
+Evaluating put_block_back | Episode 1 | Score: 100.0 | Episode Length: 12 | Lang Goal: move the block on the color patch to the center, then press the button, and finally move the block back to where it was placed
+Evaluating put_block_back | Episode 2 | Score: 0.0 | Episode Length: 25 | Lang Goal: move the block on the color patch to the center, then press the button, and finally move the block back to where it was placed
+Evaluating put_block_back | Episode 3 | Score: 0.0 | Episode Length: 25 | Lang Goal: move the block on the color patch to the center, then press the button, and finally move the block back to where it was placed
+Evaluating put_block_back | Episode 4 | Score: 0.0 | Episode Length: 25 | Lang Goal: move the block on the color patch to the center, then press the button, and finally move the block back to where it was placed
+[Evaluation] Finished put_block_back | Final Score: 20.0
+
+[CoppeliaSim:loadinfo]   done.
+model runs/sam2act_memorybench_put_block_back_freshdebug_fix_mem10_20260409/model_plus_5.pth, scores [np.float64(20.0)]
+save  {'put_block_back': np.float64(20.0)}
+avg score is 20.0

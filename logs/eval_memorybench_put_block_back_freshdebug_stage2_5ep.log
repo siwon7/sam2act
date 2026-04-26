@@ -1,0 +1,23 @@
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+MVT_SAM2's parameter size: 571.2872543334961MB
+MVT_SAM2's trainable parameter size: 35.3282356262207MB
+MVT_SAM2's parameter num: 149.75952600000002M
+MVT_SAM2's trainable parameter num: 9.261085M
+Using 8-Bit Optimizer
+Agent Information
+<sam2act.models.sam2act_agent.SAM2Act_Agent object at 0x7dd3782203a0>
+
+
+Error: signal 11:
+
+/home/cv25/siwon/coppeliasim/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04_headless/libcoppeliaSim.so.1(_Z11_segHandleri+0x30)[0x7dd61b793f10]
+/lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x7dd94e842520]
+/home/cv25/siwon/coppeliasim/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04/libcoppeliaSim.so(_Z29simGetInt32Parameter_internaliPi+0x2da)[0x7dd328d2a68a]
+/home/cv25/siwon/coppeliasim/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04/libsimExtCustomUI.so(_Z21simGetInt32ParameterEi+0x29)[0x7dd311a1af19]
+/home/cv25/siwon/coppeliasim/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04/libsimExtCustomUI.so(simStart+0xdc)[0x7dd3119f46ac]
+/home/cv25/siwon/coppeliasim/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04_headless/libcoppeliaSim.so.1(_ZN7CPlugin4loadEv+0xa7)[0x7dd61b8f9327]
+/home/cv25/siwon/coppeliasim/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04_headless/libcoppeliaSim.so.1(_ZN16CPluginContainer9addPluginEPKcS1_+0x3df)[0x7dd61b90135f]
+/home/cv25/siwon/coppeliasim/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04_headless/libcoppeliaSim.so.1(_ZN9CUiThread27__executeCommandViaUiThreadEP16SUIThreadCommandS1_+0x11b)[0x7dd61b8dbaab]
+/home/cv25/siwon/coppeliasim/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04_headless/libcoppeliaSim.so.1(_ZN9CUiThread25executeCommandViaUiThreadEP16SUIThreadCommandS1_+0x3d)[0x7dd61b8dbb8d]
+/home/cv25/siwon/coppeliasim/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04_headless/libcoppeliaSim.so.1(_Z22simLoadModule_internalPKcS0_+0x3fc)[0x7dd61b79805c]
+QMutex: destroying locked mutex

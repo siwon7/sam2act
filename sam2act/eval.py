@@ -8,12 +8,12 @@ import csv
 import torch
 import cv2
 import shutil
+import imageio.v2 as imageio
 
 import numpy as np
 
 from omegaconf import OmegaConf
 from multiprocessing import Value
-from tensorflow.python.summary.summary_iterator import summary_iterator
 from copy import deepcopy
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -25,7 +25,6 @@ from rlbench.action_modes.gripper_action_modes import Discrete
 from rlbench.action_modes.action_mode import MoveArmThenGripper
 from yarr.utils.rollout_generator import RolloutGenerator
 from yarr.utils.stat_accumulator import SimpleAccumulator
-from yarr.utils.log_writer import LogWriter
 from yarr.agents.agent import VideoSummary
 
 import sam2act.mvt.config as default_mvt_cfg
@@ -86,7 +85,10 @@ def load_agent(
     device=0,
     use_input_place_with_mean=False,
 ):
-    device = f"cuda:{device}"
+    if isinstance(device, str):
+        resolved_device = device
+    else:
+        resolved_device = f"cuda:{device}" if torch.cuda.is_available() else "cpu"
 
     if not (peract_official):
         assert model_path is not None
@@ -179,15 +181,15 @@ def load_agent(
                 exp_cfg.freeze()
 
             sam2act = mvt_sam2.MVT_SAM2(
-                renderer_device=device,
-                rank=0,
+                renderer_device=resolved_device,
+                rank=resolved_device,
                 **mvt_cfg,
             )
 
             get_model_size(sam2act)
 
             agent = sam2act_agent.SAM2Act_Agent(
-                network=sam2act.to(device),
+                network=sam2act.to(resolved_device),
                 image_resolution=[IMAGE_SIZE, IMAGE_SIZE],
                 add_lang=mvt_cfg.add_lang,
                 stage_two=mvt_cfg.stage_two,
@@ -195,13 +197,17 @@ def load_agent(
                 scene_bounds=SCENE_BOUNDS,
                 cameras=CAMERAS,
                 log_dir=f"{eval_log_dir}/eval_run",
+                use_memory=mvt_cfg.use_memory,
+                num_maskmem=mvt_cfg.num_maskmem,
                 **exp_cfg.peract,
                 **exp_cfg.rvt,
             )
         else:
             raise NotImplementedError
 
-        agent.build(training=False, device=device)
+        agent.build(training=False, device=resolved_device)
+        if hasattr(agent, "set_task_vocab"):
+            agent.set_task_vocab(exp_cfg.tasks.split(","))
         load_agent_state(model_path, agent)
         agent.eval()
 
@@ -281,7 +287,10 @@ def eval(
 
     eval_env.eval = True
 
-    device = f"cuda:{device}"
+    if isinstance(device, str):
+        device = device
+    else:
+        device = f"cuda:{device}" if torch.cuda.is_available() else "cpu"
 
     if logging:
         assert log_dir is not None
@@ -299,15 +308,27 @@ def eval(
     # rollout_generator = RolloutGenerator_sequence(device)
     stats_accumulator = SimpleAccumulator(eval_video_fps=30)
 
+    if hasattr(agent, "set_task_vocab"):
+        agent.set_task_vocab(tasks)
+
     eval_env.launch()
 
     current_task_id = -1
 
     num_tasks = len(tasks)
-    step_signal = Value("i", -1)
+    try:
+        step_signal = Value("i", -1)
+    except PermissionError:
+        class _StepSignal:
+            def __init__(self, value):
+                self.value = value
+
+        step_signal = _StepSignal(-1)
 
     scores = []
     for task_id in range(num_tasks):
+        if hasattr(agent, "set_eval_task"):
+            agent.set_eval_task(task_id)
         task_rewards = []
         for ep in range(start_episode, start_episode + eval_episodes):
             agent._network.mvt1.reset_memory_bank()
@@ -322,7 +343,7 @@ def eval(
                 timesteps=1,
                 eval=True,
                 eval_demo_seed=ep,
-                record_enabled=False,
+                record_enabled=save_video,
                 replay_ground_truth=replay_ground_truth,
             )
             try:
@@ -378,7 +399,7 @@ def eval(
                 s.value for s in summaries if f"eval_envs/return/{task_name}" in s.name
             ][0]
         else:
-            task_score = "unknown"
+            task_score = float(np.mean(task_rewards)) if len(task_rewards) > 0 else 0.0
 
         print(f"[Evaluation] Finished {task_name} | Final Score: {task_score}\n")
 
@@ -409,24 +430,7 @@ def eval(
                         )
                         video_fail_cnt += 1
                     video_cnt += 1
-                    os.makedirs(video_image_folder, exist_ok=True)
-                    for idx in range(len(video) - 10):
-                        cv2.imwrite(
-                            os.path.join(video_image_folder, f"{idx}.png"), video[idx]
-                        )
-                    images_path = os.path.join(video_image_folder, r"%d.png")
-                    os.system(
-                        "ffmpeg -i {} -vf palettegen palette.png -hide_banner -loglevel error".format(
-                            images_path
-                        )
-                    )
-                    os.system(
-                        "ffmpeg -framerate {} -i {} -i palette.png -lavfi paletteuse {} -hide_banner -loglevel error".format(
-                            record_fps, images_path, video_path
-                        )
-                    )
-                    os.remove("palette.png")
-                    shutil.rmtree(video_image_folder)
+                    imageio.mimwrite(video_path, video[: max(len(video) - 10, 1)], fps=record_fps)
 
     # also add average scores at the end
     if logging:
@@ -434,7 +438,8 @@ def eval(
             fieldnames = ["task", "success rate", "length", "total_transitions"]
             csv_writer = csv.DictWriter(csv_fp, fieldnames=fieldnames)
             csv_results = {"task": "average"}
-            csv_results["success rate"] = sum(scores) / len(scores)
+            numeric_scores = [float(s) for s in scores]
+            csv_results["success rate"] = sum(numeric_scores) / len(numeric_scores)
             csv_writer.writerow(csv_results)
 
     eval_env.shutdown()
@@ -479,6 +484,8 @@ def _eval(args):
 
     # skipping evaluated models
     if args.skip:
+        from tensorflow.python.summary.summary_iterator import summary_iterator
+
         """
         to_skip: {
             0: {'light_bulb_in': False, .....}

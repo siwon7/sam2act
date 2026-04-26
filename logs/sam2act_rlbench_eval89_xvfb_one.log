@@ -1,0 +1,54 @@
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+ImageEncoder's parameter size: 266.05517578125MB
+ImageEncoder's trainable parameter size: 2.43359375MB
+ImageEncoder's parameter num: 69.744768M
+ImageEncoder's trainable parameter num: 0.637952M
+MVT_SAM2's parameter size: 571.2547302246094MB
+MVT_SAM2's trainable parameter size: 279.01717376708984MB
+MVT_SAM2's parameter num: 149.751M
+MVT_SAM2's trainable parameter num: 73.142678M
+Using 8-Bit Optimizer
+Agent Information
+<sam2act.models.sam2act_agent.SAM2Act_Agent object at 0x7f7540077010>
+[CoppeliaSim:loadinfo]   done.
+Traceback (most recent call last):
+  File "/home/cv25/siwon/sam2act/sam2act/eval.py", line 587, in <module>
+    _eval(args)
+  File "/home/cv25/siwon/sam2act/sam2act/eval.py", line 539, in _eval
+    scores = eval(
+  File "/home/cv25/miniconda3/envs/sam2act5090/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/home/cv25/siwon/sam2act/sam2act/eval.py", line 334, in eval
+    raise e
+  File "/home/cv25/siwon/sam2act/sam2act/eval.py", line 328, in eval
+    for replay_transition in generator:
+  File "/home/cv25/siwon/sam2act/sam2act/libs/YARR/yarr/utils/rollout_generator.py", line 39, in generator
+    act_result = agent.act(step_signal.value, prepped_data,
+  File "/home/cv25/miniconda3/envs/sam2act5090/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/home/cv25/siwon/sam2act/sam2act/models/sam2act_agent.py", line 919, in act
+    out = self._network(
+  File "/home/cv25/miniconda3/envs/sam2act5090/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/cv25/miniconda3/envs/sam2act5090/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/cv25/siwon/sam2act/sam2act/mvt/mvt_sam2.py", line 524, in forward
+    wpt_local = self.get_wpt(
+  File "/home/cv25/siwon/sam2act/sam2act/mvt/mvt_sam2.py", line 266, in get_wpt
+    wpt = self.mvt1.get_wpt(
+  File "/home/cv25/siwon/sam2act/sam2act/mvt/mvt_sam2_single.py", line 1102, in get_wpt
+    pred_wpt = [
+  File "/home/cv25/siwon/sam2act/sam2act/mvt/mvt_sam2_single.py", line 1103, in <listcomp>
+    self.renderer.get_max_3d_frm_hm_cube(
+  File "/home/cv25/miniconda3/envs/sam2act5090/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/home/cv25/siwon/sam2act/sam2act/libs/point-renderer/point_renderer/rvt_renderer.py", line 243, in get_max_3d_frm_hm_cube
+    pts_hm, pts = self.get_feat_frm_hm_cube(hm, fix_cam, dyn_cam_info)
+  File "/home/cv25/miniconda3/envs/sam2act5090/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/home/cv25/siwon/sam2act/sam2act/libs/point-renderer/point_renderer/rvt_renderer.py", line 202, in get_feat_frm_hm_cube
+    fix_pts_hm, pts_cam, pts_cam_wei = rvt_ops.select_feat_from_hm(
+  File "/home/cv25/siwon/sam2act/sam2act/libs/point-renderer/point_renderer/rvt_ops.py", line 52, in select_feat_from_hm
+    pt_cam_con = pt_cam.detach().clone()
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1.01 GiB. GPU 0 has a total capacity of 31.36 GiB of which 412.12 MiB is free. Process 20136 has 9.31 GiB memory in use. Process 21455 has 9.31 GiB memory in use. Process 27945 has 9.30 GiB memory in use. Including non-PyTorch memory, this process has 3.00 GiB memory in use. Of the allocated memory 2.37 GiB is allocated by PyTorch, and 38.39 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)
+QObject::~QObject: Timers cannot be stopped from another thread

@@ -1,0 +1,210 @@
+{
+  "reset": {
+    "front_camera_extrinsics": [
+      4,
+      4
+    ],
+    "front_camera_intrinsics": [
+      3,
+      3
+    ],
+    "front_point_cloud": [
+      3,
+      128,
+      128
+    ],
+    "front_rgb": [
+      3,
+      128,
+      128
+    ],
+    "ignore_collisions": [
+      1
+    ],
+    "lang_goal_tokens": [
+      77
+    ],
+    "left_shoulder_camera_extrinsics": [
+      4,
+      4
+    ],
+    "left_shoulder_camera_intrinsics": [
+      3,
+      3
+    ],
+    "left_shoulder_point_cloud": [
+      3,
+      128,
+      128
+    ],
+    "left_shoulder_rgb": [
+      3,
+      128,
+      128
+    ],
+    "low_dim_state": [
+      4
+    ],
+    "right_shoulder_camera_extrinsics": [
+      4,
+      4
+    ],
+    "right_shoulder_camera_intrinsics": [
+      3,
+      3
+    ],
+    "right_shoulder_point_cloud": [
+      3,
+      128,
+      128
+    ],
+    "right_shoulder_rgb": [
+      3,
+      128,
+      128
+    ],
+    "wrist_camera_extrinsics": [
+      4,
+      4
+    ],
+    "wrist_camera_intrinsics": [
+      3,
+      3
+    ],
+    "wrist_point_cloud": [
+      3,
+      128,
+      128
+    ],
+    "wrist_rgb": [
+      3,
+      128,
+      128
+    ]
+  },
+  "reset_keys": [
+    "front_camera_extrinsics",
+    "front_camera_intrinsics",
+    "front_point_cloud",
+    "front_rgb",
+    "ignore_collisions",
+    "lang_goal_tokens",
+    "left_shoulder_camera_extrinsics",
+    "left_shoulder_camera_intrinsics",
+    "left_shoulder_point_cloud",
+    "left_shoulder_rgb",
+    "low_dim_state",
+    "right_shoulder_camera_extrinsics",
+    "right_shoulder_camera_intrinsics",
+    "right_shoulder_point_cloud",
+    "right_shoulder_rgb",
+    "wrist_camera_extrinsics",
+    "wrist_camera_intrinsics",
+    "wrist_point_cloud",
+    "wrist_rgb"
+  ],
+  "step": {
+    "front_camera_extrinsics": [
+      4,
+      4
+    ],
+    "front_camera_intrinsics": [
+      3,
+      3
+    ],
+    "front_point_cloud": [
+      3,
+      128,
+      128
+    ],
+    "front_rgb": [
+      3,
+      128,
+      128
+    ],
+    "ignore_collisions": [
+      1
+    ],
+    "lang_goal_tokens": [
+      77
+    ],
+    "left_shoulder_camera_extrinsics": [
+      4,
+      4
+    ],
+    "left_shoulder_camera_intrinsics": [
+      3,
+      3
+    ],
+    "left_shoulder_point_cloud": [
+      3,
+      128,
+      128
+    ],
+    "left_shoulder_rgb": [
+      3,
+      128,
+      128
+    ],
+    "low_dim_state": [
+      4
+    ],
+    "right_shoulder_camera_extrinsics": [
+      4,
+      4
+    ],
+    "right_shoulder_camera_intrinsics": [
+      3,
+      3
+    ],
+    "right_shoulder_point_cloud": [
+      3,
+      128,
+      128
+    ],
+    "right_shoulder_rgb": [
+      3,
+      128,
+      128
+    ],
+    "wrist_camera_extrinsics": [
+      4,
+      4
+    ],
+    "wrist_camera_intrinsics": [
+      3,
+      3
+    ],
+    "wrist_point_cloud": [
+      3,
+      128,
+      128
+    ],
+    "wrist_rgb": [
+      3,
+      128,
+      128
+    ]
+  },
+  "step_keys": [
+    "front_camera_extrinsics",
+    "front_camera_intrinsics",
+    "front_point_cloud",
+    "front_rgb",
+    "ignore_collisions",
+    "lang_goal_tokens",
+    "left_shoulder_camera_extrinsics",
+    "left_shoulder_camera_intrinsics",
+    "left_shoulder_point_cloud",
+    "left_shoulder_rgb",
+    "low_dim_state",
+    "right_shoulder_camera_extrinsics",
+    "right_shoulder_camera_intrinsics",
+    "right_shoulder_point_cloud",
+    "right_shoulder_rgb",
+    "wrist_camera_extrinsics",
+    "wrist_camera_intrinsics",
+    "wrist_point_cloud",
+    "wrist_rgb"
+  ]
+}

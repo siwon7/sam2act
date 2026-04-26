@@ -1,0 +1,70 @@
+=== 2026-03-31 03:50:50 KST ===
+prepare memorybench
+extracting: /home/cv25/siwon/sam2act/sam2act/data_memory/train/put_block_back.zip
+extracting: /home/cv25/siwon/sam2act/sam2act/data_memory/test/put_block_back.zip
+installed task files for put_block_back
+extracting: /home/cv25/siwon/sam2act/sam2act/data_memory/train/rearrange_block.zip
+extracting: /home/cv25/siwon/sam2act/sam2act/data_memory/test/rearrange_block.zip
+installed task files for rearrange_block
+extracting: /home/cv25/siwon/sam2act/sam2act/data_memory/train/reopen_drawer.zip
+extracting: /home/cv25/siwon/sam2act/sam2act/data_memory/test/reopen_drawer.zip
+installed task files for reopen_drawer
+memorybench ready
+=== 2026-03-31 03:52:52 KST ===
+task=put_block_back
+stage1 start
+=== 2026-04-01 12:18:35 KST ===
+task=put_block_back
+stage1 done
+stage2 start
+=== 2026-04-01 21:24:04 KST ===
+task=put_block_back
+stage2 done
+=== 2026-04-01 21:24:04 KST ===
+task=rearrange_block
+stage1 start
+=== 2026-04-03 05:55:50 KST ===
+task=rearrange_block
+stage1 done
+stage2 start
+=== 2026-04-03 15:04:32 KST ===
+task=rearrange_block
+stage2 done
+=== 2026-04-03 15:04:32 KST ===
+task=reopen_drawer
+stage1 start
+=== 2026-04-04 04:53:48 KST ===
+prepare memorybench
+already extracted: /home/cv25/siwon/sam2act/sam2act/data_memory/train/put_block_back
+already extracted: /home/cv25/siwon/sam2act/sam2act/data_memory/test/put_block_back
+installed task files for put_block_back
+already extracted: /home/cv25/siwon/sam2act/sam2act/data_memory/train/rearrange_block
+already extracted: /home/cv25/siwon/sam2act/sam2act/data_memory/test/rearrange_block
+installed task files for rearrange_block
+already extracted: /home/cv25/siwon/sam2act/sam2act/data_memory/train/reopen_drawer
+already extracted: /home/cv25/siwon/sam2act/sam2act/data_memory/test/reopen_drawer
+installed task files for reopen_drawer
+memorybench ready
+=== 2026-04-04 04:53:48 KST ===
+task=put_block_back
+stage1 start
+=== 2026-04-04 04:54:04 KST ===
+task=put_block_back
+stage1 done
+stage2 start
+=== 2026-04-04 04:54:17 KST ===
+task=put_block_back
+stage2 done
+=== 2026-04-04 04:54:17 KST ===
+task=rearrange_block
+stage1 start
+=== 2026-04-04 04:54:29 KST ===
+task=rearrange_block
+stage1 done
+stage2 start
+=== 2026-04-04 04:54:41 KST ===
+task=rearrange_block
+stage2 done
+=== 2026-04-04 04:54:41 KST ===
+task=reopen_drawer
+stage1 start

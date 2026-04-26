@@ -10,6 +10,7 @@ import argparse
 import sys
 import signal
 from datetime import datetime
+from collections import Counter
 
 import torch
 # from torch.utils.tensorboard import SummaryWriter
@@ -18,6 +19,67 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 import sam2act.utils.peract_utils as peract_utils
 from sam2act.models.peract_official import PreprocessAgent2
+
+
+def _load_state_dict_with_report(model, state_dict):
+    missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
+    if missing_keys:
+        print(f"WARNING: missing checkpoint keys ({len(missing_keys)}): {missing_keys[:20]}")
+        print(
+            "WARNING: missing checkpoint key prefixes: "
+            f"{_summarize_key_prefixes(missing_keys)}"
+        )
+    if unexpected_keys:
+        print(
+            f"WARNING: unexpected checkpoint keys ({len(unexpected_keys)}): "
+            f"{unexpected_keys[:20]}"
+        )
+        print(
+            "WARNING: unexpected checkpoint key prefixes: "
+            f"{_summarize_key_prefixes(unexpected_keys)}"
+        )
+    return missing_keys, unexpected_keys
+
+
+def _adapt_state_dict_for_model(model, state_dict):
+    adapted = dict(state_dict)
+    target_state = model.state_dict()
+    for key, value in list(adapted.items()):
+        if key not in target_state:
+            continue
+        target = target_state[key]
+        if not isinstance(value, torch.Tensor) or not isinstance(target, torch.Tensor):
+            continue
+        if value.shape == target.shape:
+            continue
+
+        # Allow longer temporal memory windows by copying the existing prefix and
+        # leaving the newly added positions at their initialized values.
+        if key.endswith("maskmem_tpos_enc"):
+            if (
+                value.ndim == target.ndim == 4
+                and value.shape[1:] == target.shape[1:]
+            ):
+                patched = target.clone()
+                copy_n = min(value.shape[0], target.shape[0])
+                patched[:copy_n] = value[:copy_n]
+                adapted[key] = patched
+                print(
+                    f"WARNING: adapted {key} from checkpoint shape {tuple(value.shape)} "
+                    f"to model shape {tuple(target.shape)} by prefix copy ({copy_n})."
+                )
+                continue
+    return adapted
+
+
+def _summarize_key_prefixes(keys, depth=3, topk=8):
+    if not keys:
+        return "{}"
+    counts = Counter(".".join(key.split(".")[:depth]) for key in keys)
+    most_common = ", ".join(
+        f"{prefix}: {count}" for prefix, count in counts.most_common(topk)
+    )
+    return "{" + most_common + "}"
 
 
 def get_pc_img_feat(obs, pcd, bounds=None):
@@ -271,20 +333,18 @@ def load_agent(agent_path, agent=None, only_epoch=False):
             model = model.module
 
         try:
-            model.load_state_dict(checkpoint["model_state"])
+            _load_state_dict_with_report(
+                model, _adapt_state_dict_for_model(model, checkpoint["model_state"])
+            )
         except RuntimeError:
-            try:
-                print(
-                    "WARNING: loading states in mvt1. "
-                    "Be cautious if you are using a two stage network."
-                )
-                model.mvt1.load_state_dict(checkpoint["model_state"])
-            except RuntimeError:
-                print(
-                    "WARNING: loading states with strick=False! "
-                    "KNOW WHAT YOU ARE DOING!!"
-                )
-                model.load_state_dict(checkpoint["model_state"], strict=False)
+            print(
+                "WARNING: loading states in mvt1. "
+                "Be cautious if you are using a two stage network."
+            )
+            _load_state_dict_with_report(
+                model.mvt1,
+                _adapt_state_dict_for_model(model.mvt1, checkpoint["model_state"]),
+            )
 
         if "optimizer_state" in checkpoint:
             optimizer.load_state_dict(checkpoint["optimizer_state"])
@@ -324,20 +384,18 @@ def load_agent_only_model(agent_path, agent=None, only_epoch=False):
             model = model.module
 
         try:
-            model.load_state_dict(checkpoint["model_state"])
+            _load_state_dict_with_report(
+                model, _adapt_state_dict_for_model(model, checkpoint["model_state"])
+            )
         except RuntimeError:
-            try:
-                print(
-                    "WARNING: loading states in mvt1. "
-                    "Be cautious if you are using a two stage network."
-                )
-                model.mvt1.load_state_dict(checkpoint["model_state"])
-            except RuntimeError:
-                print(
-                    "WARNING: loading states with strick=False! "
-                    "KNOW WHAT YOU ARE DOING!!"
-                )
-                model.load_state_dict(checkpoint["model_state"], strict=False)
+            print(
+                "WARNING: loading states in mvt1. "
+                "Be cautious if you are using a two stage network."
+            )
+            _load_state_dict_with_report(
+                model.mvt1,
+                _adapt_state_dict_for_model(model.mvt1, checkpoint["model_state"]),
+            )
 
     return epoch
 
@@ -371,19 +429,15 @@ def load_agent_only_model_exclude(agent_path, agent=None, only_epoch=False, excl
                     del sd[key]
 
         try:
-            model.load_state_dict(sd)
+            _load_state_dict_with_report(model, _adapt_state_dict_for_model(model, sd))
         except RuntimeError:
-            try:
-                print(
-                    "WARNING: loading states in mvt1. "
-                    "Be cautious if you are using a two stage network."
-                )
-                model.mvt1.load_state_dict(checkpoint["model_state"])
-            except RuntimeError:
-                print(
-                    "WARNING: loading states with strick=False! "
-                    "KNOW WHAT YOU ARE DOING!!"
-                )
-                model.load_state_dict(checkpoint["model_state"], strict=False)
+            print(
+                "WARNING: loading states in mvt1. "
+                "Be cautious if you are using a two stage network."
+            )
+            _load_state_dict_with_report(
+                model.mvt1,
+                _adapt_state_dict_for_model(model.mvt1, checkpoint["model_state"]),
+            )
 
     return epoch

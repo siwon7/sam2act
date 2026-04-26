@@ -1,0 +1,12 @@
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+ImageEncoder's parameter size: 266.05517578125MB
+ImageEncoder's trainable parameter size: 2.43359375MB
+ImageEncoder's parameter num: 69.744768M
+ImageEncoder's trainable parameter num: 0.637952M
+MVT_SAM2's parameter size: 571.2547302246094MB
+MVT_SAM2's trainable parameter size: 279.01717376708984MB
+MVT_SAM2's parameter num: 149.751M
+MVT_SAM2's trainable parameter num: 73.142678M
+Using 8-Bit Optimizer
+Agent Information
+<sam2act.models.sam2act_agent.SAM2Act_Agent object at 0x7386f0263040>

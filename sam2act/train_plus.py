@@ -251,26 +251,35 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
     )
 
     t_start = time.time()
-    get_dataset_func = lambda: get_dataset_temporal(
-        tasks,
-        BATCH_SIZE_TRAIN,
-        None,
-        # TRAIN_REPLAY_STORAGE_DIR,
-        TRAIN_REPLAY_STORAGE_DIR_MEM,
-        None,
-        # DATA_FOLDER,
-        DATA_FOLDER_MEM,
-        NUM_TRAIN,
-        None,
-        cmd_args.refresh_replay,
-        device,
-        num_workers=exp_cfg.num_workers,
-        only_train=True,
-        sample_distribution_mode=exp_cfg.sample_distribution_mode,
-        num_maskmem=mvt_cfg.num_maskmem,
-        rank=rank,
-    )
-    train_dataset, _ = get_dataset_func()
+    def get_dataset_func(refresh_replay):
+        return get_dataset_temporal(
+            tasks,
+            BATCH_SIZE_TRAIN,
+            None,
+            # TRAIN_REPLAY_STORAGE_DIR,
+            TRAIN_REPLAY_STORAGE_DIR_MEM,
+            None,
+            # DATA_FOLDER,
+            DATA_FOLDER_MEM,
+            NUM_TRAIN,
+            None,
+            refresh_replay,
+            device,
+            num_workers=exp_cfg.num_workers,
+            only_train=True,
+            sample_distribution_mode=exp_cfg.sample_distribution_mode,
+            num_maskmem=mvt_cfg.num_maskmem,
+            rank=rank,
+        )
+
+    if ddp:
+        if rank == 0:
+            train_dataset, _ = get_dataset_func(cmd_args.refresh_replay)
+        dist.barrier()
+        if rank != 0:
+            train_dataset, _ = get_dataset_func(False)
+    else:
+        train_dataset, _ = get_dataset_func(cmd_args.refresh_replay)
     t_end = time.time()
 
     if rank == 0:
@@ -306,6 +315,8 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
             **exp_cfg.rvt,
         )
         agent.build(training=True, device=device)
+        if hasattr(agent, "set_task_vocab"):
+            agent.set_task_vocab(tasks)
     else:
         assert False, "Incorrect agent"
 
@@ -320,7 +331,7 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
         epoch = load_agent(agent_path, agent, only_epoch=False)
         start_epoch = epoch + 1
 
-    elif os.path.exists(f'{log_dir}/model_plus_last.pth'):
+    elif (not cmd_args.fresh_start) and os.path.exists(f'{log_dir}/model_plus_last.pth'):
         
         agent_path = f'{log_dir}/model_plus_last.pth'
         if rank == 0:
@@ -337,11 +348,16 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
         agent_path = f'{log_dir}/model_last.pth'
         if rank == 0:
             print(f"resume from checkpoint")
-        
-        # epoch = load_agent_only_model(agent_path, agent, only_epoch=False)
-        epoch = load_agent_only_model_exclude(agent_path, agent, only_epoch=False, exclude_keys=['memory_attention', 'memory_encoder', 'maskmem_tpos_enc'])
+            print(
+                "Stage-two handoff: loading full stage-one weights, including "
+                "memory_attention, memory_encoder, and maskmem_tpos_enc."
+            )
+
+        epoch = load_agent_only_model(agent_path, agent, only_epoch=False)
         if rank == 0:
             print(f"Recovering model and checkpoint from {agent_path}")
+    elif rank == 0 and cmd_args.fresh_start:
+        print("fresh-start enabled: ignoring existing stage-two checkpoints in log dir")
         
     dist.barrier()
 
@@ -407,6 +423,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--log-dir", type=str, default="runs")
     parser.add_argument("--with-eval", action="store_true", default=False)
+    parser.add_argument("--fresh-start", action="store_true", default=False)
 
     cmd_args = parser.parse_args()
     del (

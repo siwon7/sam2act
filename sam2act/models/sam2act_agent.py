@@ -576,7 +576,28 @@ class SAM2Act_Agent:
             return q_trans, rot_q, grip_q, collision_q, y_q, pts
         
         else:
-            return q_trans, None, None, None, None, None
+            pred_out = out["mvt2"] if self.stage_two and "mvt2" in out else out
+            if self.rot_ver == 0 and "feat" in pred_out:
+                rot_q = pred_out["feat"].view(bs, -1)[:, 0 : self.num_all_rot]
+                grip_q = pred_out["feat"].view(bs, -1)[:, self.num_all_rot : self.num_all_rot + 2]
+                collision_q = pred_out["feat"].view(bs, -1)[
+                    :, self.num_all_rot + 2 : self.num_all_rot + 4
+                ]
+            elif self.rot_ver == 1 and all(
+                key in pred_out for key in ("feat_x", "feat_y", "feat_z", "feat_ex_rot")
+            ):
+                rot_q = torch.cat((pred_out["feat_x"], pred_out["feat_y"], pred_out["feat_z"]),
+                                dim=-1).view(bs, -1)
+                grip_q = pred_out["feat_ex_rot"].view(bs, -1)[:, :2]
+                collision_q = pred_out["feat_ex_rot"].view(bs, -1)[:, 2:]
+            else:
+                rot_q = None
+                grip_q = None
+                collision_q = None
+
+            y_q = None
+
+            return q_trans, rot_q, grip_q, collision_q, y_q, pts
 
     def update(
         self,
@@ -974,6 +995,25 @@ class SAM2Act_Agent:
             mvt1_or_mvt2 = False
         else:
             mvt1_or_mvt2 = True
+
+        if rot_q is None or grip_q is None or collision_q is None:
+            q_out = out["mvt2"] if (self.stage_two and not self.use_memory) else out
+            if self.rot_ver == 0:
+                rot_q = q_out["feat"].view(q_out["feat"].shape[0], -1)[:, 0 : self.num_all_rot]
+                grip_q = q_out["feat"].view(q_out["feat"].shape[0], -1)[
+                    :, self.num_all_rot : self.num_all_rot + 2
+                ]
+                collision_q = q_out["feat"].view(q_out["feat"].shape[0], -1)[
+                    :, self.num_all_rot + 2 : self.num_all_rot + 4
+                ]
+            elif self.rot_ver == 1:
+                rot_q = torch.cat(
+                    (q_out["feat_x"], q_out["feat_y"], q_out["feat_z"]), dim=-1
+                ).view(q_out["feat_x"].shape[0], -1)
+                grip_q = q_out["feat_ex_rot"].view(q_out["feat_ex_rot"].shape[0], -1)[:, :2]
+                collision_q = q_out["feat_ex_rot"].view(q_out["feat_ex_rot"].shape[0], -1)[:, 2:]
+            else:
+                assert False
 
         pred_wpt_local = self._net_mod.get_wpt(
             out, mvt1_or_mvt2, dyn_cam_info, y_q

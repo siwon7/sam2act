@@ -16,7 +16,6 @@ import point_renderer._C.render as r
 from point_renderer.profiler import PerfTimer
 
 
-@torch.jit.script
 def _prep_render_batch_inputs(points, features, inv_poses, intrinsics, img_h : int, img_w: int, orthographic : bool):
     batch_size = len(inv_poses)
     num_points = points.shape[0]
@@ -155,5 +154,4 @@ class PointRenderer:
             # Output render buffers as-is if we're rendering at the same resolution as the output
             self.timer.check("antialiasing")
             return image_buf, depth_buf
-
 
