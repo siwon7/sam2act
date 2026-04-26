@@ -36,3 +36,9 @@ Useful diagnostics:
 Useful notes:
 - `notes/stage2_recent_attempts_summary.md`
 - `notes/dualbank_softbias_20260426.md`
+- `notes/cv11_stage2_ready_branches.md`
+
+Preferred cv11 workflow:
+- do not touch the working `sam2act`
+- create separate worktrees from GitHub:
+  - `bash scripts/setup_cv11_stage2_worktrees.sh /home/cv11/project/siwon /home/cv11/project/siwon/sam2act_stage2_hub`
