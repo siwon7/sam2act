@@ -1,0 +1,510 @@
+2026-04-16 02:41:56.034760: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-04-16 02:41:56.060427: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2026-04-16 02:41:56.060456: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2026-04-16 02:41:56.061380: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2026-04-16 02:41:56.065729: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI AVX512_BF16 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2026-04-16 02:41:56.477051: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+WARNING: when three_views=True or two_views=False -- no_down=True no_top=False add_3p=False does not matter.
+ImageEncoder's parameter size: 266.05517578125MB
+ImageEncoder's trainable parameter size: 2.43359375MB
+ImageEncoder's parameter num: 69.744768M
+ImageEncoder's trainable parameter num: 0.637952M
+MVT_SAM2's parameter size: 571.2547302246094MB
+MVT_SAM2's trainable parameter size: 279.01717376708984MB
+MVT_SAM2's parameter num: 149.751M
+MVT_SAM2's trainable parameter num: 73.142678M
+Using 8-Bit Optimizer
+Agent Information
+<sam2act.models.sam2act_agent.SAM2Act_Agent object at 0x7a946a23a770>
+evaluate on 18 tasks:  ['put_item_in_drawer', 'reach_and_drag', 'turn_tap', 'slide_block_to_color_target', 'open_drawer', 'put_groceries_in_cupboard', 'place_shape_in_shape_sorter', 'put_money_in_safe', 'push_buttons', 'close_jar', 'stack_blocks', 'place_cups', 'place_wine_at_rack_location', 'light_bulb_in', 'sweep_to_dustpan_of_size', 'insert_onto_square_peg', 'meat_off_grill', 'stack_cups']
+Evaluating put_item_in_drawer | Episode 0 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the top drawer
+Evaluating put_item_in_drawer | Episode 1 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the bottom drawer
+Evaluating put_item_in_drawer | Episode 2 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the top drawer
+Evaluating put_item_in_drawer | Episode 3 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the middle drawer
+Evaluating put_item_in_drawer | Episode 4 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the middle drawer
+Evaluating put_item_in_drawer | Episode 5 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the bottom drawer
+Evaluating put_item_in_drawer | Episode 6 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the middle drawer
+Evaluating put_item_in_drawer | Episode 7 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the bottom drawer
+Evaluating put_item_in_drawer | Episode 8 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the bottom drawer
+Evaluating put_item_in_drawer | Episode 9 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the bottom drawer
+Evaluating put_item_in_drawer | Episode 10 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the bottom drawer
+Evaluating put_item_in_drawer | Episode 11 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the top drawer
+Evaluating put_item_in_drawer | Episode 12 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the top drawer
+Evaluating put_item_in_drawer | Episode 13 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the bottom drawer
+Evaluating put_item_in_drawer | Episode 14 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the top drawer
+Evaluating put_item_in_drawer | Episode 15 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the top drawer
+Evaluating put_item_in_drawer | Episode 16 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the top drawer
+Evaluating put_item_in_drawer | Episode 17 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the middle drawer
+Evaluating put_item_in_drawer | Episode 18 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the middle drawer
+Evaluating put_item_in_drawer | Episode 19 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the bottom drawer
+Evaluating put_item_in_drawer | Episode 20 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the top drawer
+Evaluating put_item_in_drawer | Episode 21 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the middle drawer
+Evaluating put_item_in_drawer | Episode 22 | Score: 100.0 | Episode Length: 16 | Lang Goal: put the item in the top drawer
+Evaluating put_item_in_drawer | Episode 23 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the middle drawer
+Evaluating put_item_in_drawer | Episode 24 | Score: 100.0 | Episode Length: 13 | Lang Goal: put the item in the bottom drawer
+[Evaluation] Finished put_item_in_drawer | Final Score: 100.0
+
+Evaluating reach_and_drag | Episode 0 | Score: 100.0 | Episode Length: 6 | Lang Goal: use the stick to drag the cube onto the navy target
+Evaluating reach_and_drag | Episode 1 | Score: 100.0 | Episode Length: 7 | Lang Goal: use the stick to drag the cube onto the gray target
+Evaluating reach_and_drag | Episode 2 | Score: 100.0 | Episode Length: 6 | Lang Goal: use the stick to drag the cube onto the red target
+Evaluating reach_and_drag | Episode 3 | Score: 100.0 | Episode Length: 6 | Lang Goal: use the stick to drag the cube onto the silver target
+Evaluating reach_and_drag | Episode 4 | Score: 100.0 | Episode Length: 7 | Lang Goal: use the stick to drag the cube onto the gray target
+Evaluating reach_and_drag | Episode 5 | Score: 100.0 | Episode Length: 7 | Lang Goal: use the stick to drag the cube onto the violet target
+Evaluating reach_and_drag | Episode 6 | Score: 100.0 | Episode Length: 10 | Lang Goal: use the stick to drag the cube onto the white target
+Evaluating reach_and_drag | Episode 7 | Score: 100.0 | Episode Length: 6 | Lang Goal: use the stick to drag the cube onto the azure target
+Evaluating reach_and_drag | Episode 8 | Score: 100.0 | Episode Length: 9 | Lang Goal: use the stick to drag the cube onto the black target
+Evaluating reach_and_drag | Episode 9 | Score: 100.0 | Episode Length: 8 | Lang Goal: use the stick to drag the cube onto the red target
+Evaluating reach_and_drag | Episode 10 | Score: 100.0 | Episode Length: 9 | Lang Goal: use the stick to drag the cube onto the rose target
+Evaluating reach_and_drag | Episode 11 | Score: 100.0 | Episode Length: 7 | Lang Goal: use the stick to drag the cube onto the white target
+Evaluating reach_and_drag | Episode 12 | Score: 100.0 | Episode Length: 6 | Lang Goal: use the stick to drag the cube onto the lime target
+Evaluating reach_and_drag | Episode 13 | Score: 100.0 | Episode Length: 7 | Lang Goal: use the stick to drag the cube onto the maroon target
+Evaluating reach_and_drag | Episode 14 | Score: 100.0 | Episode Length: 8 | Lang Goal: use the stick to drag the cube onto the gray target
+Evaluating reach_and_drag | Episode 15 | Score: 100.0 | Episode Length: 6 | Lang Goal: use the stick to drag the cube onto the red target
+Evaluating reach_and_drag | Episode 16 | Score: 100.0 | Episode Length: 8 | Lang Goal: use the stick to drag the cube onto the azure target
+Evaluating reach_and_drag | Episode 17 | Score: 100.0 | Episode Length: 10 | Lang Goal: use the stick to drag the cube onto the black target
+Evaluating reach_and_drag | Episode 18 | Score: 100.0 | Episode Length: 7 | Lang Goal: use the stick to drag the cube onto the olive target
+Evaluating reach_and_drag | Episode 19 | Score: 100.0 | Episode Length: 11 | Lang Goal: use the stick to drag the cube onto the gray target
+Evaluating reach_and_drag | Episode 20 | Score: 100.0 | Episode Length: 8 | Lang Goal: use the stick to drag the cube onto the rose target
+Evaluating reach_and_drag | Episode 21 | Score: 100.0 | Episode Length: 6 | Lang Goal: use the stick to drag the cube onto the red target
+Evaluating reach_and_drag | Episode 22 | Score: 100.0 | Episode Length: 13 | Lang Goal: use the stick to drag the cube onto the orange target
+Evaluating reach_and_drag | Episode 23 | Score: 100.0 | Episode Length: 7 | Lang Goal: use the stick to drag the cube onto the blue target
+Evaluating reach_and_drag | Episode 24 | Score: 100.0 | Episode Length: 7 | Lang Goal: use the stick to drag the cube onto the gray target
+[Evaluation] Finished reach_and_drag | Final Score: 100.0
+
+Evaluating turn_tap | Episode 0 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn right tap
+Evaluating turn_tap | Episode 1 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn left tap
+Evaluating turn_tap | Episode 2 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn left tap
+Evaluating turn_tap | Episode 3 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn right tap
+Evaluating turn_tap | Episode 4 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn left tap
+Evaluating turn_tap | Episode 5 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn left tap
+Evaluating turn_tap | Episode 6 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn left tap
+Evaluating turn_tap | Episode 7 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn right tap
+Evaluating turn_tap | Episode 8 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn right tap
+Evaluating turn_tap | Episode 9 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn left tap
+Evaluating turn_tap | Episode 10 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn right tap
+Evaluating turn_tap | Episode 11 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn left tap
+Evaluating turn_tap | Episode 12 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn right tap
+Evaluating turn_tap | Episode 13 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn left tap
+Evaluating turn_tap | Episode 14 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn left tap
+Evaluating turn_tap | Episode 15 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn right tap
+Evaluating turn_tap | Episode 16 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn right tap
+Evaluating turn_tap | Episode 17 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn right tap
+Evaluating turn_tap | Episode 18 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn left tap
+Evaluating turn_tap | Episode 19 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn left tap
+Evaluating turn_tap | Episode 20 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn left tap
+Evaluating turn_tap | Episode 21 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn right tap
+Evaluating turn_tap | Episode 22 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn left tap
+Evaluating turn_tap | Episode 23 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn left tap
+Evaluating turn_tap | Episode 24 | Score: 100.0 | Episode Length: 2 | Lang Goal: turn left tap
+[Evaluation] Finished turn_tap | Final Score: 100.0
+
+Evaluating slide_block_to_color_target | Episode 0 | Score: 100.0 | Episode Length: 2 | Lang Goal: slide the block to pink target
+Evaluating slide_block_to_color_target | Episode 1 | Score: 0.0 | Episode Length: 16 | Lang Goal: slide the block to yellow target
+Evaluating slide_block_to_color_target | Episode 2 | Score: 0.0 | Episode Length: 11 | Lang Goal: slide the block to yellow target
+Evaluating slide_block_to_color_target | Episode 3 | Score: 100.0 | Episode Length: 2 | Lang Goal: slide the block to green target
+Evaluating slide_block_to_color_target | Episode 4 | Score: 100.0 | Episode Length: 16 | Lang Goal: slide the block to blue target
+Evaluating slide_block_to_color_target | Episode 5 | Score: 100.0 | Episode Length: 17 | Lang Goal: slide the block to blue target
+Evaluating slide_block_to_color_target | Episode 6 | Score: 100.0 | Episode Length: 16 | Lang Goal: slide the block to blue target
+Evaluating slide_block_to_color_target | Episode 7 | Score: 100.0 | Episode Length: 2 | Lang Goal: slide the block to pink target
+Evaluating slide_block_to_color_target | Episode 8 | Score: 100.0 | Episode Length: 2 | Lang Goal: slide the block to green target
+Evaluating slide_block_to_color_target | Episode 9 | Score: 100.0 | Episode Length: 2 | Lang Goal: slide the block to pink target
+Evaluating slide_block_to_color_target | Episode 10 | Score: 100.0 | Episode Length: 2 | Lang Goal: slide the block to green target
+Evaluating slide_block_to_color_target | Episode 11 | Score: 100.0 | Episode Length: 2 | Lang Goal: slide the block to pink target
+Evaluating slide_block_to_color_target | Episode 12 | Score: 100.0 | Episode Length: 16 | Lang Goal: slide the block to blue target
+Evaluating slide_block_to_color_target | Episode 13 | Score: 0.0 | Episode Length: 25 | Lang Goal: slide the block to blue target
+Evaluating slide_block_to_color_target | Episode 14 | Score: 100.0 | Episode Length: 16 | Lang Goal: slide the block to yellow target
+Evaluating slide_block_to_color_target | Episode 15 | Score: 100.0 | Episode Length: 2 | Lang Goal: slide the block to pink target
+Evaluating slide_block_to_color_target | Episode 16 | Score: 100.0 | Episode Length: 2 | Lang Goal: slide the block to green target
+Evaluating slide_block_to_color_target | Episode 17 | Score: 100.0 | Episode Length: 2 | Lang Goal: slide the block to green target
+Evaluating slide_block_to_color_target | Episode 18 | Score: 100.0 | Episode Length: 2 | Lang Goal: slide the block to green target
+Evaluating slide_block_to_color_target | Episode 19 | Score: 100.0 | Episode Length: 16 | Lang Goal: slide the block to blue target
+Evaluating slide_block_to_color_target | Episode 20 | Score: 100.0 | Episode Length: 16 | Lang Goal: slide the block to yellow target
+Evaluating slide_block_to_color_target | Episode 21 | Score: 100.0 | Episode Length: 2 | Lang Goal: slide the block to pink target
+Evaluating slide_block_to_color_target | Episode 22 | Score: 100.0 | Episode Length: 2 | Lang Goal: slide the block to pink target
+Evaluating slide_block_to_color_target | Episode 23 | Score: 100.0 | Episode Length: 15 | Lang Goal: slide the block to yellow target
+Evaluating slide_block_to_color_target | Episode 24 | Score: 100.0 | Episode Length: 16 | Lang Goal: slide the block to blue target
+[Evaluation] Finished slide_block_to_color_target | Final Score: 88.0
+
+Evaluating open_drawer | Episode 0 | Score: 100.0 | Episode Length: 3 | Lang Goal: open the top drawer
+Evaluating open_drawer | Episode 1 | Score: 100.0 | Episode Length: 3 | Lang Goal: open the top drawer
+Evaluating open_drawer | Episode 2 | Score: 100.0 | Episode Length: 4 | Lang Goal: open the middle drawer
+Evaluating open_drawer | Episode 3 | Score: 100.0 | Episode Length: 3 | Lang Goal: open the bottom drawer
+Evaluating open_drawer | Episode 4 | Score: 100.0 | Episode Length: 3 | Lang Goal: open the bottom drawer
+Evaluating open_drawer | Episode 5 | Score: 0.0 | Episode Length: 4 | Lang Goal: open the middle drawer
+Evaluating open_drawer | Episode 6 | Score: 100.0 | Episode Length: 4 | Lang Goal: open the bottom drawer
+Evaluating open_drawer | Episode 7 | Score: 100.0 | Episode Length: 3 | Lang Goal: open the middle drawer
+Evaluating open_drawer | Episode 8 | Score: 0.0 | Episode Length: 4 | Lang Goal: open the bottom drawer
+Evaluating open_drawer | Episode 9 | Score: 100.0 | Episode Length: 4 | Lang Goal: open the top drawer
+Evaluating open_drawer | Episode 10 | Score: 0.0 | Episode Length: 5 | Lang Goal: open the bottom drawer
+Evaluating open_drawer | Episode 11 | Score: 100.0 | Episode Length: 16 | Lang Goal: open the middle drawer
+Evaluating open_drawer | Episode 12 | Score: 100.0 | Episode Length: 3 | Lang Goal: open the bottom drawer
+Evaluating open_drawer | Episode 13 | Score: 100.0 | Episode Length: 4 | Lang Goal: open the middle drawer
+Evaluating open_drawer | Episode 14 | Score: 0.0 | Episode Length: 25 | Lang Goal: open the bottom drawer
+Evaluating open_drawer | Episode 15 | Score: 100.0 | Episode Length: 3 | Lang Goal: open the bottom drawer
+Evaluating open_drawer | Episode 16 | Score: 100.0 | Episode Length: 3 | Lang Goal: open the middle drawer
+Evaluating open_drawer | Episode 17 | Score: 0.0 | Episode Length: 25 | Lang Goal: open the top drawer
+Evaluating open_drawer | Episode 18 | Score: 100.0 | Episode Length: 4 | Lang Goal: open the middle drawer
+Evaluating open_drawer | Episode 19 | Score: 100.0 | Episode Length: 3 | Lang Goal: open the bottom drawer
+Evaluating open_drawer | Episode 20 | Score: 100.0 | Episode Length: 3 | Lang Goal: open the middle drawer
+Evaluating open_drawer | Episode 21 | Score: 100.0 | Episode Length: 3 | Lang Goal: open the top drawer
+Evaluating open_drawer | Episode 22 | Score: 100.0 | Episode Length: 4 | Lang Goal: open the middle drawer
+Evaluating open_drawer | Episode 23 | Score: 100.0 | Episode Length: 4 | Lang Goal: open the middle drawer
+Evaluating open_drawer | Episode 24 | Score: 0.0 | Episode Length: 25 | Lang Goal: open the bottom drawer
+[Evaluation] Finished open_drawer | Final Score: 76.0
+
+Evaluating put_groceries_in_cupboard | Episode 0 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the coffee in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 1 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the coffee in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 2 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the coffee in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 3 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the mustard in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 4 | Score: 0.0 | Episode Length: 25 | Lang Goal: put the chocolate jello in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 5 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the soup in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 6 | Score: 0.0 | Episode Length: 25 | Lang Goal: put the coffee in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 7 | Score: 0.0 | Episode Length: 25 | Lang Goal: put the soup in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 8 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the mustard in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 9 | Score: 0.0 | Episode Length: 25 | Lang Goal: put the crackers in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 10 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the coffee in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 11 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the mustard in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 12 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the strawberry jello in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 13 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the sugar in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 14 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the soup in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 15 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the coffee in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 16 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the coffee in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 17 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the crackers in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 18 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the strawberry jello in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 19 | Score: 0.0 | Episode Length: 25 | Lang Goal: put the coffee in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 20 | Score: 0.0 | Episode Length: 25 | Lang Goal: put the tuna in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 21 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the coffee in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 22 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the soup in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 23 | Score: 0.0 | Episode Length: 25 | Lang Goal: put the tuna in the cupboard
+Evaluating put_groceries_in_cupboard | Episode 24 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the strawberry jello in the cupboard
+[Evaluation] Finished put_groceries_in_cupboard | Final Score: 72.0
+
+Evaluating place_shape_in_shape_sorter | Episode 0 | Score: 0.0 | Episode Length: 25 | Lang Goal: put the cylinder in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 1 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the star in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 2 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the star in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 3 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the moon in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 4 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the cylinder in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 5 | Score: 0.0 | Episode Length: 25 | Lang Goal: put the cube in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 6 | Score: 100.0 | Episode Length: 8 | Lang Goal: put the cylinder in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 7 | Score: 0.0 | Episode Length: 25 | Lang Goal: put the triangular prism in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 8 | Score: 100.0 | Episode Length: 10 | Lang Goal: put the cylinder in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 9 | Score: 0.0 | Episode Length: 25 | Lang Goal: put the cylinder in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 10 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the moon in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 11 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the cube in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 12 | Score: 0.0 | Episode Length: 25 | Lang Goal: put the star in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 13 | Score: 0.0 | Episode Length: 25 | Lang Goal: put the star in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 14 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the moon in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 15 | Score: 0.0 | Episode Length: 25 | Lang Goal: put the cube in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 16 | Score: 100.0 | Episode Length: 9 | Lang Goal: put the cube in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 17 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the cube in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 18 | Score: 100.0 | Episode Length: 7 | Lang Goal: put the cube in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 19 | Score: 0.0 | Episode Length: 25 | Lang Goal: put the cylinder in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 20 | Score: 100.0 | Episode Length: 11 | Lang Goal: put the cube in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 21 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the cube in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 22 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the cylinder in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 23 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the moon in the shape sorter
+Evaluating place_shape_in_shape_sorter | Episode 24 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the cube in the shape sorter
+[Evaluation] Finished place_shape_in_shape_sorter | Final Score: 68.0
+
+Evaluating put_money_in_safe | Episode 0 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the top shelf
+Evaluating put_money_in_safe | Episode 1 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the bottom shelf
+Evaluating put_money_in_safe | Episode 2 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the top shelf
+Evaluating put_money_in_safe | Episode 3 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the bottom shelf
+Evaluating put_money_in_safe | Episode 4 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the money away in the safe on the middle shelf
+Evaluating put_money_in_safe | Episode 5 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the bottom shelf
+Evaluating put_money_in_safe | Episode 6 | Score: 0.0 | Episode Length: 25 | Lang Goal: put the money away in the safe on the bottom shelf
+Evaluating put_money_in_safe | Episode 7 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the middle shelf
+Evaluating put_money_in_safe | Episode 8 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the middle shelf
+Evaluating put_money_in_safe | Episode 9 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the money away in the safe on the middle shelf
+Evaluating put_money_in_safe | Episode 10 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the bottom shelf
+Evaluating put_money_in_safe | Episode 11 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the top shelf
+Evaluating put_money_in_safe | Episode 12 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the bottom shelf
+Evaluating put_money_in_safe | Episode 13 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the top shelf
+Evaluating put_money_in_safe | Episode 14 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the top shelf
+Evaluating put_money_in_safe | Episode 15 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the bottom shelf
+Evaluating put_money_in_safe | Episode 16 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the middle shelf
+Evaluating put_money_in_safe | Episode 17 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the money away in the safe on the bottom shelf
+Evaluating put_money_in_safe | Episode 18 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the middle shelf
+Evaluating put_money_in_safe | Episode 19 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the money away in the safe on the bottom shelf
+Evaluating put_money_in_safe | Episode 20 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the top shelf
+Evaluating put_money_in_safe | Episode 21 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the bottom shelf
+Evaluating put_money_in_safe | Episode 22 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the bottom shelf
+Evaluating put_money_in_safe | Episode 23 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the money away in the safe on the top shelf
+Evaluating put_money_in_safe | Episode 24 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the money away in the safe on the middle shelf
+[Evaluation] Finished put_money_in_safe | Final Score: 96.0
+
+Evaluating push_buttons | Episode 0 | Score: 100.0 | Episode Length: 6 | Lang Goal: push the maroon button, then push the green button, then push the navy button
+Evaluating push_buttons | Episode 1 | Score: 100.0 | Episode Length: 2 | Lang Goal: push the maroon button
+Evaluating push_buttons | Episode 2 | Score: 100.0 | Episode Length: 2 | Lang Goal: push the maroon button
+Evaluating push_buttons | Episode 3 | Score: 100.0 | Episode Length: 2 | Lang Goal: push the maroon button
+Evaluating push_buttons | Episode 4 | Score: 100.0 | Episode Length: 2 | Lang Goal: push the maroon button
+Evaluating push_buttons | Episode 5 | Score: 100.0 | Episode Length: 4 | Lang Goal: push the maroon button, then push the blue button
+Evaluating push_buttons | Episode 6 | Score: 100.0 | Episode Length: 2 | Lang Goal: push the maroon button
+Evaluating push_buttons | Episode 7 | Score: 100.0 | Episode Length: 2 | Lang Goal: push the maroon button
+Evaluating push_buttons | Episode 8 | Score: 100.0 | Episode Length: 2 | Lang Goal: push the maroon button
+Evaluating push_buttons | Episode 9 | Score: 100.0 | Episode Length: 2 | Lang Goal: push the maroon button
+Evaluating push_buttons | Episode 10 | Score: 100.0 | Episode Length: 2 | Lang Goal: push the maroon button
+Evaluating push_buttons | Episode 11 | Score: 100.0 | Episode Length: 2 | Lang Goal: push the maroon button
+Evaluating push_buttons | Episode 12 | Score: 100.0 | Episode Length: 2 | Lang Goal: push the maroon button
+Evaluating push_buttons | Episode 13 | Score: 100.0 | Episode Length: 4 | Lang Goal: push the maroon button, then push the green button
+Evaluating push_buttons | Episode 14 | Score: 100.0 | Episode Length: 2 | Lang Goal: push the maroon button
+Evaluating push_buttons | Episode 15 | Score: 100.0 | Episode Length: 6 | Lang Goal: push the maroon button, then push the green button, then push the teal button
+Evaluating push_buttons | Episode 16 | Score: 100.0 | Episode Length: 6 | Lang Goal: push the maroon button, then push the green button, then push the teal button
+Evaluating push_buttons | Episode 17 | Score: 100.0 | Episode Length: 4 | Lang Goal: push the maroon button, then push the blue button
+Evaluating push_buttons | Episode 18 | Score: 100.0 | Episode Length: 6 | Lang Goal: push the maroon button, then push the green button, then push the navy button
+Evaluating push_buttons | Episode 19 | Score: 100.0 | Episode Length: 6 | Lang Goal: push the maroon button, then push the green button, then push the azure button
+Evaluating push_buttons | Episode 20 | Score: 100.0 | Episode Length: 2 | Lang Goal: push the maroon button
+Evaluating push_buttons | Episode 21 | Score: 100.0 | Episode Length: 6 | Lang Goal: push the maroon button, then push the green button, then push the silver button
+Evaluating push_buttons | Episode 22 | Score: 100.0 | Episode Length: 4 | Lang Goal: push the maroon button, then push the green button
+Evaluating push_buttons | Episode 23 | Score: 100.0 | Episode Length: 6 | Lang Goal: push the maroon button, then push the green button, then push the olive button
+Evaluating push_buttons | Episode 24 | Score: 100.0 | Episode Length: 4 | Lang Goal: push the maroon button, then push the green button
+[Evaluation] Finished push_buttons | Final Score: 100.0
+
+Evaluating close_jar | Episode 0 | Score: 100.0 | Episode Length: 6 | Lang Goal: close the red jar
+Evaluating close_jar | Episode 1 | Score: 100.0 | Episode Length: 5 | Lang Goal: close the cyan jar
+Evaluating close_jar | Episode 2 | Score: 100.0 | Episode Length: 5 | Lang Goal: close the orange jar
+Evaluating close_jar | Episode 3 | Score: 100.0 | Episode Length: 6 | Lang Goal: close the navy jar
+Evaluating close_jar | Episode 4 | Score: 100.0 | Episode Length: 5 | Lang Goal: close the navy jar
+Evaluating close_jar | Episode 5 | Score: 100.0 | Episode Length: 5 | Lang Goal: close the teal jar
+Evaluating close_jar | Episode 6 | Score: 100.0 | Episode Length: 5 | Lang Goal: close the azure jar
+Evaluating close_jar | Episode 7 | Score: 100.0 | Episode Length: 5 | Lang Goal: close the navy jar
+Evaluating close_jar | Episode 8 | Score: 100.0 | Episode Length: 6 | Lang Goal: close the yellow jar
+Evaluating close_jar | Episode 9 | Score: 100.0 | Episode Length: 6 | Lang Goal: close the blue jar
+Evaluating close_jar | Episode 10 | Score: 100.0 | Episode Length: 5 | Lang Goal: close the silver jar
+Evaluating close_jar | Episode 11 | Score: 100.0 | Episode Length: 5 | Lang Goal: close the magenta jar
+Evaluating close_jar | Episode 12 | Score: 100.0 | Episode Length: 5 | Lang Goal: close the gray jar
+Evaluating close_jar | Episode 13 | Score: 100.0 | Episode Length: 5 | Lang Goal: close the black jar
+Evaluating close_jar | Episode 14 | Score: 100.0 | Episode Length: 6 | Lang Goal: close the navy jar
+Evaluating close_jar | Episode 15 | Score: 100.0 | Episode Length: 6 | Lang Goal: close the yellow jar
+Evaluating close_jar | Episode 16 | Score: 100.0 | Episode Length: 6 | Lang Goal: close the white jar
+Evaluating close_jar | Episode 17 | Score: 100.0 | Episode Length: 5 | Lang Goal: close the red jar
+Evaluating close_jar | Episode 18 | Score: 100.0 | Episode Length: 5 | Lang Goal: close the green jar
+Evaluating close_jar | Episode 19 | Score: 100.0 | Episode Length: 5 | Lang Goal: close the rose jar
+Evaluating close_jar | Episode 20 | Score: 100.0 | Episode Length: 5 | Lang Goal: close the lime jar
+Evaluating close_jar | Episode 21 | Score: 100.0 | Episode Length: 5 | Lang Goal: close the white jar
+Evaluating close_jar | Episode 22 | Score: 100.0 | Episode Length: 6 | Lang Goal: close the teal jar
+Evaluating close_jar | Episode 23 | Score: 100.0 | Episode Length: 5 | Lang Goal: close the violet jar
+Evaluating close_jar | Episode 24 | Score: 100.0 | Episode Length: 5 | Lang Goal: close the cyan jar
+[Evaluation] Finished close_jar | Final Score: 100.0
+
+Evaluating stack_blocks | Episode 0 | Score: 100.0 | Episode Length: 24 | Lang Goal: stack 3 teal blocks
+Evaluating stack_blocks | Episode 1 | Score: 100.0 | Episode Length: 12 | Lang Goal: stack 2 maroon blocks
+Evaluating stack_blocks | Episode 2 | Score: 100.0 | Episode Length: 18 | Lang Goal: stack 3 yellow blocks
+Evaluating stack_blocks | Episode 3 | Score: 100.0 | Episode Length: 18 | Lang Goal: stack 3 gray blocks
+Evaluating stack_blocks | Episode 4 | Score: 100.0 | Episode Length: 24 | Lang Goal: stack 2 purple blocks
+Evaluating stack_blocks | Episode 5 | Score: 100.0 | Episode Length: 23 | Lang Goal: stack 4 navy blocks
+Evaluating stack_blocks | Episode 6 | Score: 100.0 | Episode Length: 18 | Lang Goal: stack 3 gray blocks
+Evaluating stack_blocks | Episode 7 | Score: 100.0 | Episode Length: 18 | Lang Goal: stack 3 teal blocks
+Evaluating stack_blocks | Episode 8 | Score: 100.0 | Episode Length: 12 | Lang Goal: stack 2 green blocks
+Evaluating stack_blocks | Episode 9 | Score: 100.0 | Episode Length: 11 | Lang Goal: stack 2 red blocks
+Evaluating stack_blocks | Episode 10 | Score: 0.0 | Episode Length: 22 | Lang Goal: stack 4 silver blocks
+Evaluating stack_blocks | Episode 11 | Score: 100.0 | Episode Length: 17 | Lang Goal: stack 3 blue blocks
+Evaluating stack_blocks | Episode 12 | Score: 100.0 | Episode Length: 23 | Lang Goal: stack 4 violet blocks
+Evaluating stack_blocks | Episode 13 | Score: 100.0 | Episode Length: 12 | Lang Goal: stack 2 magenta blocks
+Evaluating stack_blocks | Episode 14 | Score: 100.0 | Episode Length: 12 | Lang Goal: stack 2 lime blocks
+Evaluating stack_blocks | Episode 15 | Score: 100.0 | Episode Length: 17 | Lang Goal: stack 3 violet blocks
+Evaluating stack_blocks | Episode 16 | Score: 100.0 | Episode Length: 12 | Lang Goal: stack 2 maroon blocks
+Evaluating stack_blocks | Episode 17 | Score: 100.0 | Episode Length: 25 | Lang Goal: stack 2 orange blocks
+Evaluating stack_blocks | Episode 18 | Score: 100.0 | Episode Length: 24 | Lang Goal: stack 4 teal blocks
+Evaluating stack_blocks | Episode 19 | Score: 0.0 | Episode Length: 25 | Lang Goal: stack 3 olive blocks
+Evaluating stack_blocks | Episode 20 | Score: 100.0 | Episode Length: 11 | Lang Goal: stack 2 olive blocks
+Evaluating stack_blocks | Episode 21 | Score: 0.0 | Episode Length: 13 | Lang Goal: stack 3 cyan blocks
+Evaluating stack_blocks | Episode 22 | Score: 100.0 | Episode Length: 24 | Lang Goal: stack 4 teal blocks
+Evaluating stack_blocks | Episode 23 | Score: 100.0 | Episode Length: 11 | Lang Goal: stack 2 black blocks
+Evaluating stack_blocks | Episode 24 | Score: 0.0 | Episode Length: 25 | Lang Goal: stack 4 teal blocks
+[Evaluation] Finished stack_blocks | Final Score: 84.0
+
+Evaluating place_cups | Episode 0 | Score: 0.0 | Episode Length: 25 | Lang Goal: place 3 cups on the cup holder
+Evaluating place_cups | Episode 1 | Score: 0.0 | Episode Length: 25 | Lang Goal: place 2 cups on the cup holder
+Evaluating place_cups | Episode 2 | Score: 100.0 | Episode Length: 21 | Lang Goal: place 2 cups on the cup holder
+Evaluating place_cups | Episode 3 | Score: 0.0 | Episode Length: 25 | Lang Goal: place 2 cups on the cup holder
+Evaluating place_cups | Episode 4 | Score: 100.0 | Episode Length: 15 | Lang Goal: place 2 cups on the cup holder
+Evaluating place_cups | Episode 5 | Score: 100.0 | Episode Length: 21 | Lang Goal: place 1 cup on the cup holder
+Evaluating place_cups | Episode 6 | Score: 100.0 | Episode Length: 14 | Lang Goal: place 2 cups on the cup holder
+Evaluating place_cups | Episode 7 | Score: 100.0 | Episode Length: 7 | Lang Goal: place 1 cup on the cup holder
+Evaluating place_cups | Episode 8 | Score: 0.0 | Episode Length: 25 | Lang Goal: place 2 cups on the cup holder
+Evaluating place_cups | Episode 9 | Score: 0.0 | Episode Length: 25 | Lang Goal: place 2 cups on the cup holder
+Evaluating place_cups | Episode 10 | Score: 100.0 | Episode Length: 16 | Lang Goal: place 2 cups on the cup holder
+Evaluating place_cups | Episode 11 | Score: 0.0 | Episode Length: 25 | Lang Goal: place 3 cups on the cup holder
+Evaluating place_cups | Episode 12 | Score: 0.0 | Episode Length: 25 | Lang Goal: place 3 cups on the cup holder
+Evaluating place_cups | Episode 13 | Score: 100.0 | Episode Length: 21 | Lang Goal: place 1 cup on the cup holder
+Evaluating place_cups | Episode 14 | Score: 0.0 | Episode Length: 25 | Lang Goal: place 1 cup on the cup holder
+Evaluating place_cups | Episode 15 | Score: 100.0 | Episode Length: 21 | Lang Goal: place 3 cups on the cup holder
+Evaluating place_cups | Episode 16 | Score: 100.0 | Episode Length: 21 | Lang Goal: place 2 cups on the cup holder
+Evaluating place_cups | Episode 17 | Score: 100.0 | Episode Length: 23 | Lang Goal: place 1 cup on the cup holder
+Evaluating place_cups | Episode 18 | Score: 0.0 | Episode Length: 25 | Lang Goal: place 1 cup on the cup holder
+Evaluating place_cups | Episode 19 | Score: 100.0 | Episode Length: 22 | Lang Goal: place 2 cups on the cup holder
+Evaluating place_cups | Episode 20 | Score: 0.0 | Episode Length: 25 | Lang Goal: place 2 cups on the cup holder
+Evaluating place_cups | Episode 21 | Score: 100.0 | Episode Length: 7 | Lang Goal: place 1 cup on the cup holder
+Evaluating place_cups | Episode 22 | Score: 0.0 | Episode Length: 25 | Lang Goal: place 3 cups on the cup holder
+Evaluating place_cups | Episode 23 | Score: 0.0 | Episode Length: 25 | Lang Goal: place 2 cups on the cup holder
+Evaluating place_cups | Episode 24 | Score: 0.0 | Episode Length: 25 | Lang Goal: place 2 cups on the cup holder
+[Evaluation] Finished place_cups | Final Score: 48.0
+
+Evaluating place_wine_at_rack_location | Episode 0 | Score: 100.0 | Episode Length: 6 | Lang Goal: stack the wine bottle to the left of the rack
+Evaluating place_wine_at_rack_location | Episode 1 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the middle of the rack
+Evaluating place_wine_at_rack_location | Episode 2 | Score: 0.0 | Episode Length: 25 | Lang Goal: stack the wine bottle to the right of the rack
+Evaluating place_wine_at_rack_location | Episode 3 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the right of the rack
+Evaluating place_wine_at_rack_location | Episode 4 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the middle of the rack
+Evaluating place_wine_at_rack_location | Episode 5 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the right of the rack
+Evaluating place_wine_at_rack_location | Episode 6 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the right of the rack
+Evaluating place_wine_at_rack_location | Episode 7 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the middle of the rack
+Evaluating place_wine_at_rack_location | Episode 8 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the middle of the rack
+Evaluating place_wine_at_rack_location | Episode 9 | Score: 100.0 | Episode Length: 9 | Lang Goal: stack the wine bottle to the middle of the rack
+Evaluating place_wine_at_rack_location | Episode 10 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the middle of the rack
+Evaluating place_wine_at_rack_location | Episode 11 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the middle of the rack
+Evaluating place_wine_at_rack_location | Episode 12 | Score: 100.0 | Episode Length: 6 | Lang Goal: stack the wine bottle to the right of the rack
+Evaluating place_wine_at_rack_location | Episode 13 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the right of the rack
+Evaluating place_wine_at_rack_location | Episode 14 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the right of the rack
+Evaluating place_wine_at_rack_location | Episode 15 | Score: 100.0 | Episode Length: 6 | Lang Goal: stack the wine bottle to the left of the rack
+Evaluating place_wine_at_rack_location | Episode 16 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the left of the rack
+Evaluating place_wine_at_rack_location | Episode 17 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the right of the rack
+Evaluating place_wine_at_rack_location | Episode 18 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the middle of the rack
+Evaluating place_wine_at_rack_location | Episode 19 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the right of the rack
+Evaluating place_wine_at_rack_location | Episode 20 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the middle of the rack
+Evaluating place_wine_at_rack_location | Episode 21 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the right of the rack
+Evaluating place_wine_at_rack_location | Episode 22 | Score: 100.0 | Episode Length: 6 | Lang Goal: stack the wine bottle to the left of the rack
+Evaluating place_wine_at_rack_location | Episode 23 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the middle of the rack
+Evaluating place_wine_at_rack_location | Episode 24 | Score: 100.0 | Episode Length: 5 | Lang Goal: stack the wine bottle to the right of the rack
+[Evaluation] Finished place_wine_at_rack_location | Final Score: 96.0
+
+Evaluating light_bulb_in | Episode 0 | Score: 100.0 | Episode Length: 6 | Lang Goal: screw in the silver light bulb
+Evaluating light_bulb_in | Episode 1 | Score: 100.0 | Episode Length: 7 | Lang Goal: screw in the rose light bulb
+Evaluating light_bulb_in | Episode 2 | Score: 100.0 | Episode Length: 6 | Lang Goal: screw in the blue light bulb
+Evaluating light_bulb_in | Episode 3 | Score: 100.0 | Episode Length: 6 | Lang Goal: screw in the gray light bulb
+Evaluating light_bulb_in | Episode 4 | Score: 100.0 | Episode Length: 7 | Lang Goal: screw in the rose light bulb
+Evaluating light_bulb_in | Episode 5 | Score: 0.0 | Episode Length: 25 | Lang Goal: screw in the violet light bulb
+Evaluating light_bulb_in | Episode 6 | Score: 100.0 | Episode Length: 7 | Lang Goal: screw in the blue light bulb
+Evaluating light_bulb_in | Episode 7 | Score: 100.0 | Episode Length: 7 | Lang Goal: screw in the white light bulb
+Evaluating light_bulb_in | Episode 8 | Score: 100.0 | Episode Length: 6 | Lang Goal: screw in the white light bulb
+Evaluating light_bulb_in | Episode 9 | Score: 100.0 | Episode Length: 6 | Lang Goal: screw in the white light bulb
+Evaluating light_bulb_in | Episode 10 | Score: 100.0 | Episode Length: 6 | Lang Goal: screw in the gray light bulb
+Evaluating light_bulb_in | Episode 11 | Score: 100.0 | Episode Length: 7 | Lang Goal: screw in the black light bulb
+Evaluating light_bulb_in | Episode 12 | Score: 100.0 | Episode Length: 6 | Lang Goal: screw in the rose light bulb
+Evaluating light_bulb_in | Episode 13 | Score: 0.0 | Episode Length: 25 | Lang Goal: screw in the yellow light bulb
+Evaluating light_bulb_in | Episode 14 | Score: 100.0 | Episode Length: 6 | Lang Goal: screw in the black light bulb
+Evaluating light_bulb_in | Episode 15 | Score: 100.0 | Episode Length: 7 | Lang Goal: screw in the cyan light bulb
+Evaluating light_bulb_in | Episode 16 | Score: 100.0 | Episode Length: 6 | Lang Goal: screw in the magenta light bulb
+Evaluating light_bulb_in | Episode 17 | Score: 100.0 | Episode Length: 6 | Lang Goal: screw in the violet light bulb
+Evaluating light_bulb_in | Episode 18 | Score: 100.0 | Episode Length: 6 | Lang Goal: screw in the magenta light bulb
+Evaluating light_bulb_in | Episode 19 | Score: 100.0 | Episode Length: 6 | Lang Goal: screw in the gray light bulb
+Evaluating light_bulb_in | Episode 20 | Score: 100.0 | Episode Length: 6 | Lang Goal: screw in the orange light bulb
+Evaluating light_bulb_in | Episode 21 | Score: 100.0 | Episode Length: 7 | Lang Goal: screw in the violet light bulb
+Evaluating light_bulb_in | Episode 22 | Score: 100.0 | Episode Length: 7 | Lang Goal: screw in the blue light bulb
+Evaluating light_bulb_in | Episode 23 | Score: 100.0 | Episode Length: 7 | Lang Goal: screw in the gray light bulb
+Evaluating light_bulb_in | Episode 24 | Score: 100.0 | Episode Length: 6 | Lang Goal: screw in the cyan light bulb
+[Evaluation] Finished light_bulb_in | Final Score: 92.0
+
+Evaluating sweep_to_dustpan_of_size | Episode 0 | Score: 100.0 | Episode Length: 5 | Lang Goal: sweep dirt to the short dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 1 | Score: 100.0 | Episode Length: 5 | Lang Goal: sweep dirt to the short dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 2 | Score: 100.0 | Episode Length: 4 | Lang Goal: sweep dirt to the tall dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 3 | Score: 100.0 | Episode Length: 4 | Lang Goal: sweep dirt to the tall dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 4 | Score: 100.0 | Episode Length: 5 | Lang Goal: sweep dirt to the short dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 5 | Score: 100.0 | Episode Length: 4 | Lang Goal: sweep dirt to the tall dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 6 | Score: 100.0 | Episode Length: 4 | Lang Goal: sweep dirt to the tall dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 7 | Score: 100.0 | Episode Length: 5 | Lang Goal: sweep dirt to the short dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 8 | Score: 100.0 | Episode Length: 5 | Lang Goal: sweep dirt to the short dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 9 | Score: 100.0 | Episode Length: 5 | Lang Goal: sweep dirt to the tall dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 10 | Score: 0.0 | Episode Length: 25 | Lang Goal: sweep dirt to the tall dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 11 | Score: 100.0 | Episode Length: 5 | Lang Goal: sweep dirt to the tall dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 12 | Score: 100.0 | Episode Length: 5 | Lang Goal: sweep dirt to the short dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 13 | Score: 100.0 | Episode Length: 4 | Lang Goal: sweep dirt to the tall dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 14 | Score: 100.0 | Episode Length: 4 | Lang Goal: sweep dirt to the tall dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 15 | Score: 0.0 | Episode Length: 25 | Lang Goal: sweep dirt to the tall dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 16 | Score: 100.0 | Episode Length: 6 | Lang Goal: sweep dirt to the short dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 17 | Score: 100.0 | Episode Length: 4 | Lang Goal: sweep dirt to the tall dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 18 | Score: 100.0 | Episode Length: 4 | Lang Goal: sweep dirt to the tall dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 19 | Score: 100.0 | Episode Length: 5 | Lang Goal: sweep dirt to the short dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 20 | Score: 100.0 | Episode Length: 4 | Lang Goal: sweep dirt to the tall dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 21 | Score: 100.0 | Episode Length: 5 | Lang Goal: sweep dirt to the short dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 22 | Score: 100.0 | Episode Length: 5 | Lang Goal: sweep dirt to the short dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 23 | Score: 100.0 | Episode Length: 4 | Lang Goal: sweep dirt to the tall dustpan
+Evaluating sweep_to_dustpan_of_size | Episode 24 | Score: 100.0 | Episode Length: 4 | Lang Goal: sweep dirt to the tall dustpan
+[Evaluation] Finished sweep_to_dustpan_of_size | Final Score: 92.0
+
+Evaluating insert_onto_square_peg | Episode 0 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the azure spoke
+Evaluating insert_onto_square_peg | Episode 1 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the ring on the yellow spoke
+Evaluating insert_onto_square_peg | Episode 2 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the ring on the green spoke
+Evaluating insert_onto_square_peg | Episode 3 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the ring on the black spoke
+Evaluating insert_onto_square_peg | Episode 4 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the purple spoke
+Evaluating insert_onto_square_peg | Episode 5 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the violet spoke
+Evaluating insert_onto_square_peg | Episode 6 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the violet spoke
+Evaluating insert_onto_square_peg | Episode 7 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the lime spoke
+Evaluating insert_onto_square_peg | Episode 8 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the black spoke
+Evaluating insert_onto_square_peg | Episode 9 | Score: 0.0 | Episode Length: 25 | Lang Goal: put the ring on the orange spoke
+Evaluating insert_onto_square_peg | Episode 10 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the ring on the orange spoke
+Evaluating insert_onto_square_peg | Episode 11 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the white spoke
+Evaluating insert_onto_square_peg | Episode 12 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the yellow spoke
+Evaluating insert_onto_square_peg | Episode 13 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the purple spoke
+Evaluating insert_onto_square_peg | Episode 14 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the silver spoke
+Evaluating insert_onto_square_peg | Episode 15 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the magenta spoke
+Evaluating insert_onto_square_peg | Episode 16 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the magenta spoke
+Evaluating insert_onto_square_peg | Episode 17 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the azure spoke
+Evaluating insert_onto_square_peg | Episode 18 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the azure spoke
+Evaluating insert_onto_square_peg | Episode 19 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the ring on the silver spoke
+Evaluating insert_onto_square_peg | Episode 20 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the black spoke
+Evaluating insert_onto_square_peg | Episode 21 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the purple spoke
+Evaluating insert_onto_square_peg | Episode 22 | Score: 100.0 | Episode Length: 6 | Lang Goal: put the ring on the maroon spoke
+Evaluating insert_onto_square_peg | Episode 23 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the navy spoke
+Evaluating insert_onto_square_peg | Episode 24 | Score: 100.0 | Episode Length: 5 | Lang Goal: put the ring on the yellow spoke
+[Evaluation] Finished insert_onto_square_peg | Final Score: 96.0
+
+Evaluating meat_off_grill | Episode 0 | Score: 100.0 | Episode Length: 6 | Lang Goal: take the steak off the grill
+Evaluating meat_off_grill | Episode 1 | Score: 100.0 | Episode Length: 6 | Lang Goal: take the steak off the grill
+Evaluating meat_off_grill | Episode 2 | Score: 100.0 | Episode Length: 5 | Lang Goal: take the steak off the grill
+Evaluating meat_off_grill | Episode 3 | Score: 100.0 | Episode Length: 6 | Lang Goal: take the steak off the grill
+Evaluating meat_off_grill | Episode 4 | Score: 100.0 | Episode Length: 6 | Lang Goal: take the chicken off the grill
+Evaluating meat_off_grill | Episode 5 | Score: 100.0 | Episode Length: 5 | Lang Goal: take the chicken off the grill
+Evaluating meat_off_grill | Episode 6 | Score: 100.0 | Episode Length: 11 | Lang Goal: take the steak off the grill
+Evaluating meat_off_grill | Episode 7 | Score: 100.0 | Episode Length: 6 | Lang Goal: take the steak off the grill
+Evaluating meat_off_grill | Episode 8 | Score: 100.0 | Episode Length: 5 | Lang Goal: take the steak off the grill
+Evaluating meat_off_grill | Episode 9 | Score: 100.0 | Episode Length: 5 | Lang Goal: take the chicken off the grill
+Evaluating meat_off_grill | Episode 10 | Score: 100.0 | Episode Length: 5 | Lang Goal: take the chicken off the grill
+Evaluating meat_off_grill | Episode 11 | Score: 100.0 | Episode Length: 5 | Lang Goal: take the chicken off the grill
+Evaluating meat_off_grill | Episode 12 | Score: 100.0 | Episode Length: 5 | Lang Goal: take the steak off the grill
+Evaluating meat_off_grill | Episode 13 | Score: 100.0 | Episode Length: 5 | Lang Goal: take the chicken off the grill
+Evaluating meat_off_grill | Episode 14 | Score: 100.0 | Episode Length: 6 | Lang Goal: take the steak off the grill
+Evaluating meat_off_grill | Episode 15 | Score: 100.0 | Episode Length: 6 | Lang Goal: take the steak off the grill
+Evaluating meat_off_grill | Episode 16 | Score: 100.0 | Episode Length: 5 | Lang Goal: take the steak off the grill
+Evaluating meat_off_grill | Episode 17 | Score: 100.0 | Episode Length: 5 | Lang Goal: take the chicken off the grill
+Evaluating meat_off_grill | Episode 18 | Score: 100.0 | Episode Length: 5 | Lang Goal: take the chicken off the grill
+Evaluating meat_off_grill | Episode 19 | Score: 100.0 | Episode Length: 6 | Lang Goal: take the steak off the grill
+Evaluating meat_off_grill | Episode 20 | Score: 100.0 | Episode Length: 5 | Lang Goal: take the chicken off the grill
+Evaluating meat_off_grill | Episode 21 | Score: 100.0 | Episode Length: 5 | Lang Goal: take the steak off the grill
+Evaluating meat_off_grill | Episode 22 | Score: 100.0 | Episode Length: 6 | Lang Goal: take the steak off the grill
+Evaluating meat_off_grill | Episode 23 | Score: 100.0 | Episode Length: 5 | Lang Goal: take the chicken off the grill
+Evaluating meat_off_grill | Episode 24 | Score: 100.0 | Episode Length: 8 | Lang Goal: take the steak off the grill
+[Evaluation] Finished meat_off_grill | Final Score: 100.0
+
+Evaluating stack_cups | Episode 0 | Score: 0.0 | Episode Length: 25 | Lang Goal: stack the other cups on top of the maroon cup
+Evaluating stack_cups | Episode 1 | Score: 100.0 | Episode Length: 11 | Lang Goal: stack the other cups on top of the maroon cup
+Evaluating stack_cups | Episode 2 | Score: 0.0 | Episode Length: 25 | Lang Goal: stack the other cups on top of the gray cup
+Evaluating stack_cups | Episode 3 | Score: 100.0 | Episode Length: 18 | Lang Goal: stack the other cups on top of the black cup
+Evaluating stack_cups | Episode 4 | Score: 100.0 | Episode Length: 11 | Lang Goal: stack the other cups on top of the violet cup
+Evaluating stack_cups | Episode 5 | Score: 100.0 | Episode Length: 10 | Lang Goal: stack the other cups on top of the blue cup
+Evaluating stack_cups | Episode 6 | Score: 100.0 | Episode Length: 11 | Lang Goal: stack the other cups on top of the lime cup
+Evaluating stack_cups | Episode 7 | Score: 100.0 | Episode Length: 10 | Lang Goal: stack the other cups on top of the gray cup
+Evaluating stack_cups | Episode 8 | Score: 100.0 | Episode Length: 10 | Lang Goal: stack the other cups on top of the red cup
+Evaluating stack_cups | Episode 9 | Score: 100.0 | Episode Length: 10 | Lang Goal: stack the other cups on top of the red cup
+Evaluating stack_cups | Episode 10 | Score: 100.0 | Episode Length: 11 | Lang Goal: stack the other cups on top of the cyan cup
+Evaluating stack_cups | Episode 11 | Score: 100.0 | Episode Length: 14 | Lang Goal: stack the other cups on top of the blue cup
+Evaluating stack_cups | Episode 12 | Score: 100.0 | Episode Length: 10 | Lang Goal: stack the other cups on top of the gray cup
+Evaluating stack_cups | Episode 13 | Score: 100.0 | Episode Length: 11 | Lang Goal: stack the other cups on top of the green cup
+Evaluating stack_cups | Episode 14 | Score: 100.0 | Episode Length: 10 | Lang Goal: stack the other cups on top of the olive cup
+Evaluating stack_cups | Episode 15 | Score: 100.0 | Episode Length: 10 | Lang Goal: stack the other cups on top of the silver cup
+Evaluating stack_cups | Episode 16 | Score: 100.0 | Episode Length: 10 | Lang Goal: stack the other cups on top of the violet cup
+Evaluating stack_cups | Episode 17 | Score: 0.0 | Episode Length: 25 | Lang Goal: stack the other cups on top of the maroon cup
+Evaluating stack_cups | Episode 18 | Score: 0.0 | Episode Length: 25 | Lang Goal: stack the other cups on top of the cyan cup
+Evaluating stack_cups | Episode 19 | Score: 100.0 | Episode Length: 11 | Lang Goal: stack the other cups on top of the teal cup
+Evaluating stack_cups | Episode 20 | Score: 100.0 | Episode Length: 11 | Lang Goal: stack the other cups on top of the purple cup
+Evaluating stack_cups | Episode 21 | Score: 100.0 | Episode Length: 11 | Lang Goal: stack the other cups on top of the magenta cup
+Evaluating stack_cups | Episode 22 | Score: 100.0 | Episode Length: 11 | Lang Goal: stack the other cups on top of the yellow cup
+Evaluating stack_cups | Episode 23 | Score: 100.0 | Episode Length: 11 | Lang Goal: stack the other cups on top of the rose cup
+Evaluating stack_cups | Episode 24 | Score: 100.0 | Episode Length: 11 | Lang Goal: stack the other cups on top of the violet cup
+[Evaluation] Finished stack_cups | Final Score: 84.0
+
+model runs/sam2act_rlbench/model_89.pth, scores [100.0, 100.0, 100.0, 88.0, 76.0, 72.0, 68.0, 96.0, 100.0, 100.0, 84.0, 48.0, 96.0, 92.0, 92.0, 96.0, 100.0, 84.0]
+save  {'all': 100.0}
+avg score is 88.44444444444444
+[CoppeliaSim:loadinfo]   done.
