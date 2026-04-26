@@ -54,6 +54,11 @@ _C.ifsep = False
 _C.resize_rgb = True
 _C.use_memory = False
 _C.num_maskmem = 7
+_C.spatial_graph_enabled = False
+_C.spatial_graph_dist_thresh = 0.08
+_C.spatial_graph_ema_alpha = 0.5
+_C.spatial_graph_mask_value = -1.0e4
+_C.spatial_graph_write_use_gt_train = True
 
 _C.sam2_config = '/configs/sam2.1/sam2.1_hiera_b+'
 _C.sam2_ckpt = './mvt/sam2_train/checkpoints/sam2.1_hiera_base_plus.pt'
