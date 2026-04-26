@@ -42,9 +42,6 @@ _C.peract.transform_augmentation = True
 _C.peract.transform_augmentation_xyz = [0.1, 0.1, 0.1]
 _C.peract.transform_augmentation_rpy = [0.0, 0.0, 20.0]
 _C.peract.same_trans_aug_per_seq = False
-_C.peract.spatial_graph_contrastive_loss_weight = 0.0
-_C.peract.spatial_graph_contrastive_temp = 0.1
-_C.peract.spatial_graph_contrastive_thresh = 0.08
 
 # arguments present in only rvt and not peract
 _C.rvt = CN()

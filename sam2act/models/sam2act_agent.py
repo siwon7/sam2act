@@ -26,7 +26,6 @@ from peract_colab.arm.optim.lamb import Lamb
 from yarr.agents.agent import ActResult
 from sam2act.utils.dataset import _clip_encode_text
 from sam2act.utils.lr_sched_utils import GradualWarmupScheduler
-from sam2act.utils.spatial_graph_memory import spatial_graph_contrastive_loss
 
 
 def eval_con(gt, pred):
@@ -327,9 +326,6 @@ class SAM2Act_Agent:
         same_trans_aug_per_seq: bool = False,
         use_memory: bool = False,
         num_maskmem: int = 7,
-        spatial_graph_contrastive_loss_weight: float = 0.0,
-        spatial_graph_contrastive_temp: float = 0.1,
-        spatial_graph_contrastive_thresh: float = 0.08,
     ):
         """
         :param gt_hm_sigma: the std of the groundtruth hm, currently for for
@@ -393,9 +389,6 @@ class SAM2Act_Agent:
 
         self.use_memory = use_memory
         self._num_maskmem = num_maskmem
-        self.spatial_graph_contrastive_loss_weight = spatial_graph_contrastive_loss_weight
-        self.spatial_graph_contrastive_temp = spatial_graph_contrastive_temp
-        self.spatial_graph_contrastive_thresh = spatial_graph_contrastive_thresh
 
     def build(self, training: bool, device: torch.device = None):
         self._training = training
@@ -772,8 +765,6 @@ class SAM2Act_Agent:
             with autocast(enabled=self.amp):
                 # cross-entropy loss
                 trans_loss = self._cross_entropy_loss(q_trans, action_trans).mean()
-                spatial_graph_aux_loss = torch.tensor(0.0, device=self._device)
-                spatial_graph_aux_top3_acc = None
                 rot_loss_x = rot_loss_y = rot_loss_z = 0.0
                 grip_loss = 0.0
                 collision_loss = 0.0
@@ -822,29 +813,8 @@ class SAM2Act_Agent:
                     )
 
                 else:
-                    if (
-                        self.spatial_graph_contrastive_loss_weight > 0.0
-                        and "spatial_graph_hidden" in out
-                    ):
-                        graph_hidden = out["spatial_graph_hidden"].view(bs, -1)
-                        num_obs = self._num_maskmem + 1
-                        if graph_hidden.shape[0] % num_obs == 0 and graph_hidden.shape[0] > 0:
-                            num_seq = graph_hidden.shape[0] // num_obs
-                            graph_hidden = graph_hidden.view(num_seq, num_obs, -1)
-                            pos_seq = wpt_local.view(num_seq, num_obs, 3)
-                            spatial_graph_aux_loss, spatial_graph_aux_top3_acc = (
-                                spatial_graph_contrastive_loss(
-                                    hidden_states=graph_hidden,
-                                    positions=pos_seq,
-                                    temperature=self.spatial_graph_contrastive_temp,
-                                    distance_threshold=self.spatial_graph_contrastive_thresh,
-                                )
-                            )
 
-                    total_loss = (
-                        trans_loss
-                        + self.spatial_graph_contrastive_loss_weight * spatial_graph_aux_loss
-                    )
+                    total_loss = trans_loss
 
 
             self._optimizer.zero_grad(set_to_none=True)
@@ -865,12 +835,6 @@ class SAM2Act_Agent:
                 "rot_loss_z": rot_loss_z.item() if not self.use_memory else None,
                 "grip_loss": grip_loss.item() if not self.use_memory else None,
                 "collision_loss": collision_loss.item() if not self.use_memory else None,
-                "spatial_graph_aux_loss": spatial_graph_aux_loss.item()
-                if self.use_memory
-                else None,
-                "spatial_graph_aux_top3_acc": spatial_graph_aux_top3_acc.item()
-                if (self.use_memory and spatial_graph_aux_top3_acc is not None)
-                else None,
                 "lr": self._optimizer.param_groups[0]["lr"],
             }
             manage_loss_log(self, loss_log, reset_log=reset_log)

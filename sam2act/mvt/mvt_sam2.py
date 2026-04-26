@@ -93,11 +93,6 @@ class MVT_SAM2(nn.Module):
         sam2_ckpt,
         use_memory,
         num_maskmem,
-        spatial_graph_enabled,
-        spatial_graph_dist_thresh,
-        spatial_graph_ema_alpha,
-        spatial_graph_mask_value,
-        spatial_graph_write_use_gt_train,
         renderer_device="cuda:0",
     ):
         """MultiView Transfomer

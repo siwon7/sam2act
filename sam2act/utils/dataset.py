@@ -698,10 +698,7 @@ def fill_replay_temporal(
 
     disk_exist = False
     if replay._disk_saving:
-        replay_ready = os.path.exists(task_replay_storage_folder) and os.path.exists(
-            os.path.join(task_replay_storage_folder, "init_frame_to_idx.pkl")
-        )
-        if replay_ready:
+        if os.path.exists(task_replay_storage_folder):
             if rank == 0:
                 print(
                     "[Info] Replay dataset already exists in the disk: {}".format(
@@ -784,3 +781,4 @@ def fill_replay_temporal(
             )
 
         print("Replay filled with demos.")
+

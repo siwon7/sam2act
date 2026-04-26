@@ -11,10 +11,6 @@ from torch import nn
 from einops import rearrange, repeat
 
 import sam2act.mvt.utils as mvt_utils
-from sam2act.utils.spatial_graph_memory import (
-    SpatialGraphMemoryBank,
-    build_spatial_attention_bias,
-)
 from sam2act.mvt.attn import (
     Conv2DBlock,
     Conv2DUpsampleBlock,
@@ -103,11 +99,6 @@ class MVT_SAM2_Single(nn.Module):
         sam2_ckpt,
         use_memory,
         num_maskmem,
-        spatial_graph_enabled,
-        spatial_graph_dist_thresh,
-        spatial_graph_ema_alpha,
-        spatial_graph_mask_value,
-        spatial_graph_write_use_gt_train,
         renderer_device="cuda:0",
         renderer=None,
         no_feat=False,
@@ -210,21 +201,10 @@ class MVT_SAM2_Single(nn.Module):
         self.rank = rank
         self.use_memory = use_memory
         self.num_maskmem = num_maskmem
-        self.spatial_graph_enabled = spatial_graph_enabled
-        self.spatial_graph_dist_thresh = spatial_graph_dist_thresh
-        self.spatial_graph_ema_alpha = spatial_graph_ema_alpha
-        self.spatial_graph_mask_value = spatial_graph_mask_value
-        self.spatial_graph_write_use_gt_train = spatial_graph_write_use_gt_train
-        self.spatial_graph_bank = SpatialGraphMemoryBank(
-            distance_threshold=self.spatial_graph_dist_thresh,
-            ema_alpha=self.spatial_graph_ema_alpha,
-        )
 
         self.curr_obs_idx = 0
-        self.prev_query_pos = None
-        self.curr_query_pos = None
 
-        self.memory_bank_multiview = [[] for _ in range(3)] if self.rend_three_views else [[] for _ in range(5)]
+        self.memory_bank_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
 
 
         if self.cvx_up:
@@ -548,15 +528,8 @@ class MVT_SAM2_Single(nn.Module):
         return vision_feats_all, vision_pos_embeds_all
     
     def reset_memory_bank(self):
-        self.memory_bank_multiview = [[] for _ in range(3)] if self.rend_three_views else [[] for _ in range(5)]
+        self.memory_bank_multiview = [{} for _ in range(3)] if self.rend_three_views else [{} for _ in range(5)]
         self.curr_obs_idx = 0
-        self.prev_query_pos = None
-        self.curr_query_pos = None
-
-    def _get_query_pos(self, idx: int):
-        if self.training:
-            return self.curr_query_pos
-        return self.prev_query_pos
 
     def sam2_forward_with_memory(self, net, idx, num_views, feat_sizes):
         GPUdevice = self.rank
@@ -577,46 +550,31 @@ class MVT_SAM2_Single(nn.Module):
             t_pos_and_prevs = []
 
             if len(memory_bank_list) > 0:
-                recent_nodes = self.spatial_graph_bank.recent_nodes(
-                    memory_bank_list, net.num_maskmem
-                )
-                for node in recent_nodes:
-                    t_pos = max(1, self.curr_obs_idx - int(node["last_obs_idx"]))
-                    t_pos = min(t_pos, net.num_maskmem)
-                    t_pos_and_prevs.append((t_pos, node))
+                num_mem = min(len(memory_bank_list), net.num_maskmem)
+
+                for t_pos in range(1, num_mem + 1):
+                    # here t_pos is "how many act away from the current act"
+                    t_pos_and_prevs.append((t_pos, memory_bank_list.get(self.curr_obs_idx - t_pos))) 
 
                 to_cat_memory = []
                 to_cat_memory_pos_embed = []
-                memory_nodes = []
 
                 for t_pos, prev in t_pos_and_prevs:
                     # "maskmem_features" might have been offloaded to CPU in demo use cases,
                     # so we load it back to GPU (it's a no-op if it's already on GPU).
-                    feats = prev["memory"].cuda()
+                    feats = prev[0].cuda()
                     to_cat_memory.append(feats)
                     # Spatial positional encoding (it might have been offloaded to CPU in eval)
-                    maskmem_enc = prev["memory_pos"].cuda()
+                    maskmem_enc = prev[1].cuda()
                     # Temporal positional encoding
                     # the smaller the index, the closer in time
                     maskmem_enc = (
                         maskmem_enc + net.maskmem_tpos_enc[t_pos - 1]
                     )
                     to_cat_memory_pos_embed.append(maskmem_enc)
-                    memory_nodes.append(prev)
 
                 memory_fused = torch.cat(to_cat_memory, dim=0)
                 memory_pos_fused = torch.cat(to_cat_memory_pos_embed, dim=0)
-                memory_attn_mask = None
-                if self.spatial_graph_enabled:
-                    query_pos = self._get_query_pos(idx)
-                    memory_attn_mask = build_spatial_attention_bias(
-                        query_pos=query_pos,
-                        memory_nodes=memory_nodes,
-                        distance_threshold=self.spatial_graph_dist_thresh,
-                        mask_value=self.spatial_graph_mask_value,
-                        device=memory_fused.device,
-                        dtype=memory_fused.dtype,
-                    )
                 
                 '''memory attention'''
 
@@ -626,8 +584,7 @@ class MVT_SAM2_Single(nn.Module):
                     curr_pos=[vision_pos_embeds[-1]],
                     memory=memory_fused,
                     memory_pos=memory_pos_fused,
-                    num_obj_ptr_tokens=0,
-                    memory_attn_mask=memory_attn_mask,
+                    num_obj_ptr_tokens=0
                 )
 
             else:
@@ -645,7 +602,7 @@ class MVT_SAM2_Single(nn.Module):
 
         return final_image_embeds
 
-    def sam2_add_new_memory(self, net, hm, idx, num_views, feat_sizes, node_pos_3d):
+    def sam2_add_new_memory(self, net, hm, idx, num_views, feat_sizes):
         GPUdevice = self.rank
 
         for view_idx in range(num_views):
@@ -687,26 +644,7 @@ class MVT_SAM2_Single(nn.Module):
 
             memory_bank_list = self.memory_bank_multiview[view_idx]
 
-            if self.spatial_graph_enabled and node_pos_3d is not None:
-                self.spatial_graph_bank.update(
-                    memory_bank=memory_bank_list,
-                    new_feat=memory,
-                    new_pos_enc=memory_pos,
-                    new_kf_pos=node_pos_3d.detach(),
-                    obs_idx=self.curr_obs_idx,
-                )
-            else:
-                memory_bank_list.append(
-                    {
-                        "memory": memory,
-                        "memory_pos": memory_pos,
-                        "pos3d": node_pos_3d.reshape(-1, 3)[0].detach()
-                        if node_pos_3d is not None
-                        else torch.zeros(3, device=memory.device),
-                        "last_obs_idx": int(self.curr_obs_idx),
-                        "count": 1,
-                    }
-                )
+            memory_bank_list[self.curr_obs_idx] = [memory, memory_pos]
 
     def forward(
         self,
@@ -934,27 +872,19 @@ class MVT_SAM2_Single(nn.Module):
                 num_seq = bs // num_obs
                 bs_ = bs
                 bs = 1
-                query_pos_seq = wpt_local.detach() if (self.spatial_graph_enabled and wpt_local is not None) else None
 
                 x_ = []
                 u_ = []
                 trans_ = []
-                graph_hidden_ = []
                 for seq_idx in range(num_seq):
                     self.reset_memory_bank()
 
                     for obs_idx in range(num_obs):
 
                         idx = num_obs * seq_idx + obs_idx
-                        if query_pos_seq is not None:
-                            self.curr_query_pos = query_pos_seq[idx : idx + 1]
                         x_i = self.sam2_forward_with_memory(self.sam2, idx, num_img, feat_sizes)
 
                         x_.append(x_i)
-                        graph_hidden_.append(
-                            x_i.view(1, num_img, x_i.shape[1], x_i.shape[2], x_i.shape[3])
-                            .mean(dim=[1, 3, 4])
-                        )
 
                         if self.cvx_up:
                             with torch.cuda.amp.autocast(enabled=False):
@@ -985,26 +915,13 @@ class MVT_SAM2_Single(nn.Module):
                         trans_.append(trans)
 
                         if self.use_memory:
-                            if self.spatial_graph_enabled and self.spatial_graph_write_use_gt_train and query_pos_seq is not None:
-                                write_pos = query_pos_seq[idx : idx + 1]
-                            else:
-                                write_pos = self.get_wpt({"trans": trans}, dyn_cam_info=None).detach()
-                            self.sam2_add_new_memory(
-                                self.sam2,
-                                trans.view(bs, num_img, 1, 1, h, w),
-                                idx,
-                                num_img,
-                                feat_sizes,
-                                write_pos,
-                            )
+                            self.sam2_add_new_memory(self.sam2, trans.view(bs, num_img, 1, 1, h, w), idx, num_img, feat_sizes)
                             self.curr_obs_idx += 1
-                            self.prev_query_pos = write_pos.detach()
 
                 x = torch.cat(x_, dim=0)
                 if not self.cvx_up:
                     u = torch.cat(u_, dim=0)
                 trans = torch.cat(trans_, dim=0)
-                graph_hidden = torch.cat(graph_hidden_, dim=0)
                 bs = bs_
 
 
@@ -1013,7 +930,6 @@ class MVT_SAM2_Single(nn.Module):
             else:
                 with torch.cuda.amp.autocast(enabled=True):
                     x = self.sam2_forward_with_memory(self.sam2, 0, num_img, feat_sizes)
-                graph_hidden = x.view(bs, num_img, x.shape[1], x.shape[2], x.shape[3]).mean(dim=[1, 3, 4])
                 if self.cvx_up:
                     with torch.cuda.amp.autocast(enabled=False):
                         conv1, ln1, act1, conv2, ln2, act2, up, conv3 = self.up0
@@ -1041,17 +957,8 @@ class MVT_SAM2_Single(nn.Module):
 
                 if self.use_memory:
                     with torch.cuda.amp.autocast(enabled=True):
-                        write_pos = self.get_wpt({"trans": trans}, dyn_cam_info=None).detach()
-                        self.sam2_add_new_memory(
-                            self.sam2,
-                            trans.view(bs, num_img, 1, 1, h, w),
-                            0,
-                            num_img,
-                            feat_sizes,
-                            write_pos,
-                        )
+                        self.sam2_add_new_memory(self.sam2, trans.view(bs, num_img, 1, 1, h, w), 0, num_img, feat_sizes)
                     self.curr_obs_idx += 1
-                    self.prev_query_pos = write_pos.detach()
                 
         if not self.no_feat:
             if self.feat_ver == 0:
@@ -1171,8 +1078,6 @@ class MVT_SAM2_Single(nn.Module):
             out = {}
 
         out.update({"trans": trans})
-        if self.use_memory and "graph_hidden" in locals():
-            out["spatial_graph_hidden"] = graph_hidden.unsqueeze(1)
 
         return out
 
