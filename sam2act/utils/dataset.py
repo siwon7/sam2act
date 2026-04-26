@@ -268,6 +268,7 @@ def create_replay_temporal(
         ReplayElement("keypoint_idx", (), int),
         ReplayElement("phase_label", (), int),
         ReplayElement("role_label", (), int),
+        ReplayElement("visit_mode_label", (), int),
         ReplayElement("role_ref_valid", (), int),
         ReplayElement(
             "role_ref_mask",
@@ -638,7 +639,7 @@ def _add_keypoints_to_replay_temporal(
 
         prev_action = np.copy(action)
 
-        role_label, role_ref_valid, role_ref_mask, anchor_use_label = (
+        role_label, visit_mode_label, role_ref_valid, role_ref_mask, anchor_use_label = (
             get_memorybench_role_graph_targets(task, k, len(episode_keypoints))
         )
 
@@ -651,6 +652,7 @@ def _add_keypoints_to_replay_temporal(
             "keypoint_idx": k,
             "phase_label": get_memorybench_phase_label(task, k, len(episode_keypoints)),
             "role_label": role_label,
+            "visit_mode_label": visit_mode_label,
             "role_ref_valid": role_ref_valid,
             "role_ref_mask": role_ref_mask,
             "anchor_use_label": anchor_use_label,

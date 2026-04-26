@@ -31,6 +31,21 @@ _PUT_BLOCK_BACK_ROLE_SEQUENCE: List[int] = [
     0,  # 11
 ]
 
+_PUT_BLOCK_BACK_VISIT_MODE_SEQUENCE: List[int] = [
+    0,  # 0: first visit to initial_slot_low
+    0,  # 1: first visit to initial_slot_high
+    0,  # 2: first visit to center_high
+    0,  # 3: first visit to center_low
+    1,  # 4: revisit center_high
+    0,  # 5: first visit to button_high
+    0,  # 6: first visit to button_low
+    1,  # 7: revisit center_high
+    1,  # 8: revisit center_low
+    1,  # 9: revisit center_high
+    1,  # 10: revisit initial_slot_high
+    1,  # 11: revisit initial_slot_low
+]
+
 
 _PUT_BLOCK_BACK_ROLE_REF_ROLES: Dict[int, List[int]] = {
     # Regrasp block from center: center roles remain the key reference.
@@ -54,11 +69,12 @@ def get_memorybench_role_graph_targets(
     task: str,
     keypoint_idx: int,
     num_keypoints: int,
-) -> Tuple[int, int, np.ndarray, int]:
+) -> Tuple[int, int, int, np.ndarray, int]:
     """Return grouped role-graph targets for MemoryBench.
 
     Returns:
       role_label: grouped semantic role id
+      visit_mode_label: 0 for new target prototype, 1 for revisit target
       role_ref_valid: whether role_ref_mask should be supervised
       role_ref_mask: multi-hot over grouped role ids
       anchor_use_label: whether persistent slot anchors should be emphasized
@@ -70,17 +86,25 @@ def get_memorybench_role_graph_targets(
 
     if task == "put_block_back" and num_keypoints == len(_PUT_BLOCK_BACK_ROLE_SEQUENCE):
         role_label = int(_PUT_BLOCK_BACK_ROLE_SEQUENCE[keypoint_idx])
+        visit_mode_label = int(_PUT_BLOCK_BACK_VISIT_MODE_SEQUENCE[keypoint_idx])
         role_ref_mask = np.zeros(len(PUT_BLOCK_BACK_ROLE_NAMES), dtype=np.float32)
         role_ref_roles = _PUT_BLOCK_BACK_ROLE_REF_ROLES.get(keypoint_idx, [])
         for role_idx in role_ref_roles:
             role_ref_mask[role_idx] = 1.0
         role_ref_valid = int(len(role_ref_roles) > 0)
         anchor_use_label = int(_PUT_BLOCK_BACK_ANCHOR_USE.get(keypoint_idx, 0))
-        return role_label, role_ref_valid, role_ref_mask, anchor_use_label
+        return (
+            role_label,
+            visit_mode_label,
+            role_ref_valid,
+            role_ref_mask,
+            anchor_use_label,
+        )
 
     # Fallback for tasks without explicit grouped-role annotation.
     role_label = ROLE_GRAPH_IGNORE
+    visit_mode_label = 0
     role_ref_valid = 0
     role_ref_mask = np.zeros(len(PUT_BLOCK_BACK_ROLE_NAMES), dtype=np.float32)
     anchor_use_label = 0
-    return role_label, role_ref_valid, role_ref_mask, anchor_use_label
+    return role_label, visit_mode_label, role_ref_valid, role_ref_mask, anchor_use_label

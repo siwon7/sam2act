@@ -333,6 +333,8 @@ class SAM2Act_Agent:
         phase_aux_label_key: str = "phase_label",
         role_graph_loss_weight: float = 0.0,
         role_graph_label_key: str = "role_label",
+        visit_mode_loss_weight: float = 0.0,
+        visit_mode_label_key: str = "visit_mode_label",
         role_ref_loss_weight: float = 0.0,
         role_ref_valid_key: str = "role_ref_valid",
         role_ref_label_key: str = "role_ref_mask",
@@ -411,6 +413,8 @@ class SAM2Act_Agent:
         self.phase_aux_label_key = phase_aux_label_key
         self.role_graph_loss_weight = role_graph_loss_weight
         self.role_graph_label_key = role_graph_label_key
+        self.visit_mode_loss_weight = visit_mode_loss_weight
+        self.visit_mode_label_key = visit_mode_label_key
         self.role_ref_loss_weight = role_ref_loss_weight
         self.role_ref_valid_key = role_ref_valid_key
         self.role_ref_label_key = role_ref_label_key
@@ -849,6 +853,8 @@ class SAM2Act_Agent:
             phase_aux_acc = None
             role_graph_loss = torch.tensor(0.0, device=self._device)
             role_graph_acc = None
+            visit_mode_loss = torch.tensor(0.0, device=self._device)
+            visit_mode_acc = None
             role_ref_loss = torch.tensor(0.0, device=self._device)
             role_ref_top3_acc = None
             anchor_use_loss = torch.tensor(0.0, device=self._device)
@@ -899,6 +905,25 @@ class SAM2Act_Agent:
                         phase_aux_logits[valid_mask].argmax(dim=-1)
                         == phase_aux_target[valid_mask]
                     ).float().mean()
+            if (
+                self.visit_mode_loss_weight > 0.0
+                and "visit_mode_logits" in pred_out
+                and self.visit_mode_label_key in replay_sample
+            ):
+                visit_mode_logits = pred_out["visit_mode_logits"].view(bs)
+                visit_mode_target = replay_sample[self.visit_mode_label_key]
+                if visit_mode_target.ndim > 1:
+                    visit_mode_target = visit_mode_target[:, -1]
+                visit_mode_target = visit_mode_target.float().to(
+                    visit_mode_logits.device
+                )
+                visit_mode_loss = self._bce_logits_loss(
+                    visit_mode_logits, visit_mode_target
+                ).mean()
+                visit_mode_acc = (
+                    (torch.sigmoid(visit_mode_logits) > 0.5)
+                    == (visit_mode_target > 0.5)
+                ).float().mean()
             if (
                 self.role_graph_loss_weight > 0.0
                 and "role_graph_logits" in pred_out
@@ -1036,6 +1061,9 @@ class SAM2Act_Agent:
                         self.phase_aux_loss_weight * phase_aux_loss
                     )
                     total_loss = total_loss + (
+                        self.visit_mode_loss_weight * visit_mode_loss
+                    )
+                    total_loss = total_loss + (
                         self.role_graph_loss_weight * role_graph_loss
                     )
                     total_loss = total_loss + (
@@ -1078,6 +1106,12 @@ class SAM2Act_Agent:
                 else None,
                 "phase_aux_acc": phase_aux_acc.item()
                 if phase_aux_acc is not None
+                else None,
+                "visit_mode_loss": visit_mode_loss.item()
+                if self.visit_mode_loss_weight > 0.0
+                else None,
+                "visit_mode_acc": visit_mode_acc.item()
+                if visit_mode_acc is not None
                 else None,
                 "role_graph_loss": role_graph_loss.item()
                 if self.role_graph_loss_weight > 0.0

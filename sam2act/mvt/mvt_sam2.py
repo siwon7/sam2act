@@ -246,6 +246,7 @@ class MVT_SAM2(nn.Module):
                             "up0",
                             "role_",
                             "phase_",
+                            "visit_mode_",
                             "anchor_use_",
                             "graph_node",
                         )
@@ -268,6 +269,7 @@ class MVT_SAM2(nn.Module):
                                 "sam",
                                 "role_",
                                 "phase_",
+                                "visit_mode_",
                                 "anchor_use_",
                                 "graph_node",
                             )

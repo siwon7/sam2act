@@ -271,6 +271,10 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
         assert mvt_cfg.role_graph_num_classes > 0, (
             "mvt.role_graph_num_classes must be > 0 when role graph loss is enabled"
         )
+    if exp_cfg.peract.visit_mode_loss_weight > 0.0:
+        assert mvt_cfg.role_graph_enabled, (
+            "mvt.role_graph_enabled must be True when visit mode loss is enabled"
+        )
     if exp_cfg.peract.role_ref_loss_weight > 0.0:
         assert mvt_cfg.role_graph_enabled, (
             "mvt.role_graph_enabled must be True when role reference loss is enabled"

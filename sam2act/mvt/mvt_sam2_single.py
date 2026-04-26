@@ -240,6 +240,7 @@ class MVT_SAM2_Single(nn.Module):
         self.memory_gate_context = None
         self.latest_eval_role_tag = 0
         self.role_graph_logits_runtime = []
+        self.visit_mode_logits_runtime = []
         self.phase_graph_logits_runtime = []
         self.role_ref_logits_runtime = []
         self.anchor_use_logits_runtime = []
@@ -435,6 +436,7 @@ class MVT_SAM2_Single(nn.Module):
             self.role_graph_head = nn.Linear(
                 self.role_graph_hidden_dim, self.role_graph_num_classes
             )
+            self.visit_mode_head = nn.Linear(self.role_graph_hidden_dim, 1)
             if self.phase_graph_num_classes > 0:
                 self.phase_head = nn.Linear(
                     self.role_graph_hidden_dim, self.phase_graph_num_classes
@@ -450,6 +452,7 @@ class MVT_SAM2_Single(nn.Module):
             )
             self.role_query_proj.apply(initialize_weights)
             self.role_graph_head.apply(initialize_weights)
+            self.visit_mode_head.apply(initialize_weights)
             if self.phase_head is not None:
                 self.phase_head.apply(initialize_weights)
             self.role_ref_head.apply(initialize_weights)
@@ -458,6 +461,7 @@ class MVT_SAM2_Single(nn.Module):
         else:
             self.role_query_proj = None
             self.role_graph_head = None
+            self.visit_mode_head = None
             self.phase_head = None
             self.role_ref_head = None
             self.anchor_use_head = None
@@ -650,6 +654,7 @@ class MVT_SAM2_Single(nn.Module):
     def _reset_role_graph_runtime(self):
         self.latest_eval_role_tag = 0
         self.role_graph_logits_runtime = []
+        self.visit_mode_logits_runtime = []
         self.phase_graph_logits_runtime = []
         self.role_ref_logits_runtime = []
         self.anchor_use_logits_runtime = []
@@ -666,6 +671,7 @@ class MVT_SAM2_Single(nn.Module):
         query_input = torch.stack(pooled_views, dim=0).mean(dim=0, keepdim=True)
         role_hidden = self.role_query_proj(query_input)
         role_logits = self.role_graph_head(role_hidden)
+        visit_mode_logits = self.visit_mode_head(role_hidden).squeeze(-1)
         phase_logits = (
             self.phase_head(role_hidden) if self.phase_head is not None else None
         )
@@ -674,6 +680,7 @@ class MVT_SAM2_Single(nn.Module):
         return {
             "hidden": role_hidden,
             "role_logits": role_logits,
+            "visit_mode_logits": visit_mode_logits,
             "phase_logits": phase_logits,
             "role_ref_logits": role_ref_logits,
             "anchor_use_logits": anchor_use_logits,
@@ -682,6 +689,7 @@ class MVT_SAM2_Single(nn.Module):
     def _build_memory_attn_bias(
         self,
         memory_entries,
+        visit_mode_logits,
         role_ref_logits,
         anchor_use_logits,
         device,
@@ -690,6 +698,7 @@ class MVT_SAM2_Single(nn.Module):
         if not self.role_graph_enabled or len(memory_entries) == 0:
             return None
 
+        revisit_prob = torch.sigmoid(visit_mode_logits).view(-1)[0]
         role_ref_probs = torch.sigmoid(role_ref_logits).view(-1)
         anchor_use_prob = torch.sigmoid(anchor_use_logits).view(-1)[0]
         role_scale = self.role_graph_bias_scale
@@ -701,9 +710,9 @@ class MVT_SAM2_Single(nn.Module):
             role_tag = int(entry["role_tag"])
             entry_bias = torch.zeros((), device=device)
             if 0 <= role_tag < role_ref_probs.shape[0]:
-                entry_bias = entry_bias + role_scale * (2.0 * role_ref_probs[role_tag] - 1.0)
+                entry_bias = entry_bias + revisit_prob * role_scale * (2.0 * role_ref_probs[role_tag] - 1.0)
             if entry["is_anchor"]:
-                entry_bias = entry_bias + anchor_scale * (2.0 * anchor_use_prob - 1.0)
+                entry_bias = entry_bias + revisit_prob * anchor_scale * (2.0 * anchor_use_prob - 1.0)
             token_biases.append(entry_bias.repeat(entry_len))
 
         if not token_biases:
@@ -726,8 +735,6 @@ class MVT_SAM2_Single(nn.Module):
         anchor_role_tags = self.anchor_role_tags_multiview[view_idx]
         anchor_entries = []
         for anchor_idx in sorted(anchor_bank.keys()):
-            if anchor_idx in recent_keys:
-                continue
             anchor_entries.append(
                 {
                     "idx": anchor_idx,
@@ -801,6 +808,7 @@ class MVT_SAM2_Single(nn.Module):
             self.role_graph_logits_runtime.append(role_query_outputs["role_logits"])
             if role_query_outputs["phase_logits"] is not None:
                 self.phase_graph_logits_runtime.append(role_query_outputs["phase_logits"])
+            self.visit_mode_logits_runtime.append(role_query_outputs["visit_mode_logits"])
             self.role_ref_logits_runtime.append(role_query_outputs["role_ref_logits"])
             self.anchor_use_logits_runtime.append(role_query_outputs["anchor_use_logits"])
             if not self.training:
@@ -869,6 +877,7 @@ class MVT_SAM2_Single(nn.Module):
                 if role_query_outputs is not None:
                     attn_bias = self._build_memory_attn_bias(
                         memory_entries=memory_entries,
+                        visit_mode_logits=role_query_outputs["visit_mode_logits"],
                         role_ref_logits=role_query_outputs["role_ref_logits"],
                         anchor_use_logits=role_query_outputs["anchor_use_logits"],
                         device=memory_fused.device,
@@ -963,17 +972,12 @@ class MVT_SAM2_Single(nn.Module):
 
             memory_bank_list[self.curr_obs_idx] = [memory, memory_pos]
             self.memory_role_tags_multiview[view_idx][self.curr_obs_idx] = role_label_value
-            if (
-                self.persistent_anchor_enabled
-                and self.curr_obs_idx < self.persistent_anchor_max_steps
-            ):
-                self.anchor_memory_bank_multiview[view_idx][self.curr_obs_idx] = [
-                    memory,
-                    memory_pos,
-                ]
-                self.anchor_role_tags_multiview[view_idx][
-                    self.curr_obs_idx
-                ] = role_label_value
+            if self.persistent_anchor_enabled:
+                anchor_bank = self.anchor_memory_bank_multiview[view_idx]
+                anchor_tags = self.anchor_role_tags_multiview[view_idx]
+                if role_label_value not in anchor_bank:
+                    anchor_bank[role_label_value] = [memory, memory_pos]
+                    anchor_tags[role_label_value] = role_label_value
 
             if self.role_graph_enabled and self.role_contrast_proj is not None:
                 contrast_view_embeds.append(
@@ -1455,6 +1459,10 @@ class MVT_SAM2_Single(nn.Module):
             out["phase_graph_logits"] = torch.cat(
                 self.phase_graph_logits_runtime, dim=0
             ).unsqueeze(1)
+        if self.visit_mode_logits_runtime:
+            out["visit_mode_logits"] = torch.cat(
+                self.visit_mode_logits_runtime, dim=0
+            ).view(-1, 1, 1)
         if self.role_ref_logits_runtime:
             out["role_ref_logits"] = torch.cat(
                 self.role_ref_logits_runtime, dim=0
