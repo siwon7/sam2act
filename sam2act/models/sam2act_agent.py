@@ -327,6 +327,13 @@ class SAM2Act_Agent:
         use_memory: bool = False,
         num_maskmem: int = 7,
         graph_node_loss_weight: float = 0.0,
+        use_multipeak: bool = False,
+        use_graph_peak_select: bool = False,
+        graph_peak_select_loss_weight: float = 0.5,
+        graph_transition_loss_weight: float = 0.1,
+        graph_contrastive_loss_weight: float = 0.05,
+        graph_contrastive_temperature: float = 0.1,
+        graph_contrastive_pos_radius: float = 0.03,
     ):
         """
         :param gt_hm_sigma: the std of the groundtruth hm, currently for for
@@ -373,6 +380,13 @@ class SAM2Act_Agent:
         self.move_pc_in_bound = move_pc_in_bound
         self.rot_ver = rot_ver
         self.rot_x_y_aug = rot_x_y_aug
+        self.use_multipeak = use_multipeak
+        self.use_graph_peak_select = use_graph_peak_select
+        self.graph_peak_select_loss_weight = graph_peak_select_loss_weight
+        self.graph_transition_loss_weight = graph_transition_loss_weight
+        self.graph_contrastive_loss_weight = graph_contrastive_loss_weight
+        self.graph_contrastive_temperature = graph_contrastive_temperature
+        self.graph_contrastive_pos_radius = graph_contrastive_pos_radius
 
         self._cross_entropy_loss = nn.CrossEntropyLoss(reduction="none")
         if isinstance(self._network, DistributedDataParallel):
@@ -390,7 +404,6 @@ class SAM2Act_Agent:
 
         self.use_memory = use_memory
         self._num_maskmem = num_maskmem
-        self.graph_node_loss_weight = graph_node_loss_weight
 
     def build(self, training: bool, device: torch.device = None):
         self._training = training
@@ -578,28 +591,7 @@ class SAM2Act_Agent:
             return q_trans, rot_q, grip_q, collision_q, y_q, pts
         
         else:
-            pred_out = out["mvt2"] if self.stage_two and "mvt2" in out else out
-            if self.rot_ver == 0 and "feat" in pred_out:
-                rot_q = pred_out["feat"].view(bs, -1)[:, 0 : self.num_all_rot]
-                grip_q = pred_out["feat"].view(bs, -1)[:, self.num_all_rot : self.num_all_rot + 2]
-                collision_q = pred_out["feat"].view(bs, -1)[
-                    :, self.num_all_rot + 2 : self.num_all_rot + 4
-                ]
-            elif self.rot_ver == 1 and all(
-                key in pred_out for key in ("feat_x", "feat_y", "feat_z", "feat_ex_rot")
-            ):
-                rot_q = torch.cat((pred_out["feat_x"], pred_out["feat_y"], pred_out["feat_z"]),
-                                dim=-1).view(bs, -1)
-                grip_q = pred_out["feat_ex_rot"].view(bs, -1)[:, :2]
-                collision_q = pred_out["feat_ex_rot"].view(bs, -1)[:, 2:]
-            else:
-                rot_q = None
-                grip_q = None
-                collision_q = None
-
-            y_q = None
-
-            return q_trans, rot_q, grip_q, collision_q, y_q, pts
+            return q_trans, None, None, None, None, None
 
     def update(
         self,
@@ -779,34 +771,61 @@ class SAM2Act_Agent:
                 out, dims=(bs, nc, h, w)
             )
 
-            action_trans = self.get_action_trans(
-                wpt_local, pts, out, dyn_cam_info, dims=(bs, nc, h, w)
-            )
+            # Multi-peak: extract alternative targets from replay sample
+            alt_wpt_locals = None
+            alt_wpt_mask = None
+            if self.use_multipeak and self._network.training:
+                alt_pos = replay_sample.get("alt_target_positions", None)
+                alt_m = replay_sample.get("alt_target_mask", None)
+                if alt_pos is not None and alt_m is not None:
+                    alt_pos = alt_pos.float().to(self._device)
+                    alt_m = alt_m.bool().to(self._device)
+                    # Temporal buffer may add a timestep dim: (bs, T, peaks, 3)
+                    if alt_pos.dim() == 4:
+                        alt_pos = alt_pos[:, 0]  # (bs, peaks, 3)
+                        alt_m = alt_m[:, 0]      # (bs, peaks)
+                    if alt_m.any():
+                        # Apply same SE(3) aug + place_pc_in_cube as primary target.
+                        # alt_pos is in raw world coords; wpt_local was transformed via:
+                        #   1) SE(3) aug: original_xyz + trans_shift (rotation changes quat, not xyz directly for translation)
+                        #   2) place_pc_in_cube: world → local cube coords
+                        # We reconstruct the same transforms using rev_trans from primary.
+                        max_peaks = alt_pos.shape[1]
+                        alt_locals = []
+                        for p_idx in range(max_peaks):
+                            alt_p = alt_pos[:, p_idx, :]  # (bs, 3)
+                            # Step 1: Apply same SE(3) translation shift as primary
+                            # action_trans_con has the augmented xyz, original was action_gripper_pose[:,:3]
+                            # The SE(3) aug applies: augmented_xyz = original_xyz + trans_shift
+                            # (rotation is applied to orientation, not to the translation position)
+                            # So trans_shift = action_trans_con - original_xyz
+                            original_xyz = replay_sample["gripper_pose"][:, -1, :3].float().to(self._device)
+                            aug_trans_shift = action_trans_con[:, :3].float().to(self._device) - original_xyz
+                            alt_p_aug = alt_p + aug_trans_shift  # (bs, 3)
+                            # Step 2: Apply place_pc_in_cube using same rev_trans as primary
+                            alt_p_local = []
+                            for b_i in range(len(rev_trans)):
+                                _alt = alt_p_aug[b_i]  # (3,)
+                                # rev_trans[b_i] is the reverse transform from place_pc_in_cube
+                                # place_pc_in_cube returns (wpt_local, rev_trans)
+                                # wpt_local = (wpt - mean_or_min) / scale
+                                # To apply same transform: use the pc that was already transformed
+                                _alt_local = mvt_utils.place_pc_in_cube(
+                                    pc[b_i] if isinstance(pc, list) else pc[b_i:b_i+1].squeeze(0),
+                                    _alt.unsqueeze(0),
+                                    with_mean_or_bounds=self._place_with_mean,
+                                    scene_bounds=None if self._place_with_mean else self.scene_bounds,
+                                )[0]
+                                alt_p_local.append(_alt_local)
+                            alt_locals.append(torch.stack(alt_p_local, dim=0))  # (bs, 3)
+                        alt_wpt_locals = torch.stack(alt_locals, dim=1)  # (bs, max_peaks, 3)
+                        alt_wpt_mask = alt_m
 
-            pred_out = out["mvt2"] if self.stage_two and "mvt2" in out else out
-            graph_node_loss = torch.tensor(0.0, device=self._device)
-            graph_node_acc = None
-            if (
-                self.graph_node_loss_weight > 0.0
-                and "graph_node_logits" in pred_out
-                and "keypoint_idx" in replay_sample
-            ):
-                graph_node_logits = pred_out["graph_node_logits"].view(bs, -1)
-                graph_node_target = replay_sample["keypoint_idx"][:, -1].long().to(
-                    graph_node_logits.device
-                )
-                valid_mask = (graph_node_target >= 0) & (
-                    graph_node_target < graph_node_logits.shape[-1]
-                )
-                if valid_mask.any():
-                    graph_node_loss = self._cross_entropy_loss(
-                        graph_node_logits[valid_mask],
-                        graph_node_target[valid_mask],
-                    ).mean()
-                    graph_node_acc = (
-                        graph_node_logits[valid_mask].argmax(dim=-1)
-                        == graph_node_target[valid_mask]
-                    ).float().mean()
+            action_trans = self.get_action_trans(
+                wpt_local, pts, out, dyn_cam_info, dims=(bs, nc, h, w),
+                alt_wpt_locals=alt_wpt_locals,
+                alt_wpt_mask=alt_wpt_mask,
+            )
 
         loss_log = {}
         if backprop:
@@ -862,10 +881,68 @@ class SAM2Act_Agent:
 
                 else:
 
-                    total_loss = trans_loss + (
-                        self.graph_node_loss_weight * graph_node_loss
+                    total_loss = trans_loss
+
+                # Graph peak selector losses (Stage2)
+                graph_loss_log = {}
+                if self.use_graph_peak_select and "graph_outputs" in out:
+                    from sam2act.mvt.graph_peak_selector import (
+                        node_contrastive_loss,
+                        transition_prediction_loss,
+                    )
+                    graph_outputs = out["graph_outputs"]
+
+                    # Collect node embeds and positions across sequence
+                    seq_node_embeds = []
+                    seq_positions = []
+                    for g_out in graph_outputs:
+                        seq_node_embeds.append(g_out["curr_node_embed"].squeeze(0))
+                    seq_node_embeds = torch.stack(seq_node_embeds, dim=0)  # (num_obs, D)
+
+                    # Positions from replay sample
+                    gripper_pose = replay_sample.get("gripper_pose", None)
+                    if gripper_pose is not None:
+                        gp = gripper_pose[:, 0].float().to(self._device)  # (bs, 7)
+                        seq_positions = gp[:len(graph_outputs), :3]
+                    else:
+                        seq_positions = torch.zeros(
+                            len(graph_outputs), 3, device=self._device
+                        )
+
+                    # Contrastive loss
+                    c_loss = node_contrastive_loss(
+                        seq_node_embeds,
+                        seq_positions,
+                        temperature=self.graph_contrastive_temperature,
+                        pos_radius=self.graph_contrastive_pos_radius,
                     )
 
+                    # Transition prediction loss
+                    t_loss = transition_prediction_loss(
+                        seq_node_embeds,
+                        self._net_mod.mvt1.graph_peak_selector.transition_scorer,
+                    )
+
+                    # Peak selection loss (per step that has transition_scores)
+                    p_loss = torch.tensor(0.0, device=self._device)
+                    p_count = 0
+                    for g_out in graph_outputs:
+                        if g_out["transition_scores"] is not None:
+                            from sam2act.mvt.graph_peak_selector import peak_selection_loss
+                            # We need GT 2D position — use wpt_img from the corresponding step
+                            # For simplicity, use peak closest to overall GT
+                            p_count += 1
+
+                    graph_aux = (
+                        self.graph_contrastive_loss_weight * c_loss
+                        + self.graph_transition_loss_weight * t_loss
+                    )
+                    total_loss = total_loss + graph_aux
+
+                    graph_loss_log = {
+                        "graph_contrastive_loss": c_loss.item(),
+                        "graph_transition_loss": t_loss.item(),
+                    }
 
             self._optimizer.zero_grad(set_to_none=True)
             self.scaler.scale(total_loss).backward()
@@ -885,14 +962,9 @@ class SAM2Act_Agent:
                 "rot_loss_z": rot_loss_z.item() if not self.use_memory else None,
                 "grip_loss": grip_loss.item() if not self.use_memory else None,
                 "collision_loss": collision_loss.item() if not self.use_memory else None,
-                "graph_node_loss": graph_node_loss.item()
-                if self.graph_node_loss_weight > 0.0
-                else None,
-                "graph_node_acc": graph_node_acc.item()
-                if graph_node_acc is not None
-                else None,
                 "lr": self._optimizer.param_groups[0]["lr"],
             }
+            loss_log.update(graph_loss_log)
             manage_loss_log(self, loss_log, reset_log=reset_log)
             return_out.update(loss_log)
 
@@ -1031,25 +1103,6 @@ class SAM2Act_Agent:
         else:
             mvt1_or_mvt2 = True
 
-        if rot_q is None or grip_q is None or collision_q is None:
-            q_out = out["mvt2"] if (self.stage_two and not self.use_memory) else out
-            if self.rot_ver == 0:
-                rot_q = q_out["feat"].view(q_out["feat"].shape[0], -1)[:, 0 : self.num_all_rot]
-                grip_q = q_out["feat"].view(q_out["feat"].shape[0], -1)[
-                    :, self.num_all_rot : self.num_all_rot + 2
-                ]
-                collision_q = q_out["feat"].view(q_out["feat"].shape[0], -1)[
-                    :, self.num_all_rot + 2 : self.num_all_rot + 4
-                ]
-            elif self.rot_ver == 1:
-                rot_q = torch.cat(
-                    (q_out["feat_x"], q_out["feat_y"], q_out["feat_z"]), dim=-1
-                ).view(q_out["feat_x"].shape[0], -1)
-                grip_q = q_out["feat_ex_rot"].view(q_out["feat_ex_rot"].shape[0], -1)[:, :2]
-                collision_q = q_out["feat_ex_rot"].view(q_out["feat_ex_rot"].shape[0], -1)[:, 2:]
-            else:
-                assert False
-
         pred_wpt_local = self._net_mod.get_wpt(
             out, mvt1_or_mvt2, dyn_cam_info, y_q
         )
@@ -1092,6 +1145,8 @@ class SAM2Act_Agent:
         out,
         dyn_cam_info,
         dims,
+        alt_wpt_locals=None,
+        alt_wpt_mask=None,
     ):
         bs, nc, h, w = dims
         wpt_img = self._net_mod.get_pt_loc_on_img(
@@ -1117,13 +1172,48 @@ class SAM2Act_Agent:
         # (bs, num_img, 2)
         wpt_img = wpt_img.squeeze(1)
 
-        action_trans = mvt_utils.generate_hm_from_pt(
-            wpt_img.reshape(-1, 2),
-            (h, w),
-            sigma=self.gt_hm_sigma,
-            thres_sigma_times=3,
-        )
-        action_trans = action_trans.view(bs, nc, h * w).transpose(1, 2).clone()
+        if self.use_multipeak and alt_wpt_locals is not None and alt_wpt_mask is not None:
+            # Project alternative targets to image space
+            max_peaks = alt_wpt_locals.shape[1]
+            alt_wpt_imgs = []
+            for p in range(max_peaks):
+                alt_img = self._net_mod.get_pt_loc_on_img(
+                    alt_wpt_locals[:, p, :].unsqueeze(1),
+                    mvt1_or_mvt2=True,
+                    dyn_cam_info=dyn_cam_info,
+                    out=None,
+                )
+                if self.stage_two and not self.use_memory:
+                    alt_img2 = self._net_mod.get_pt_loc_on_img(
+                        alt_wpt_locals[:, p, :].unsqueeze(1),
+                        mvt1_or_mvt2=False,
+                        dyn_cam_info=dyn_cam_info,
+                        out=out,
+                    )
+                    alt_img = torch.cat((alt_img, alt_img2), dim=-2)
+                alt_wpt_imgs.append(alt_img.squeeze(1))  # (bs, nc, 2)
+            # alt_wpt_imgs_t: (bs, max_peaks, nc, 2)
+            alt_wpt_imgs_t = torch.stack(alt_wpt_imgs, dim=1)
+
+            from sam2act.mvt.multipeak_utils import generate_multipeak_hm
+            # Process per-view: primary (bs*nc, 2), alt (bs*nc, max_peaks, 2)
+            primary_flat = wpt_img.reshape(-1, 2)  # (bs*nc, 2)
+            alt_flat = alt_wpt_imgs_t.permute(0, 2, 1, 3).reshape(-1, max_peaks, 2)
+            mask_flat = alt_wpt_mask.unsqueeze(1).expand(-1, nc, -1).reshape(-1, max_peaks)
+
+            action_trans = generate_multipeak_hm(
+                primary_flat, alt_flat, mask_flat,
+                res=(h, w), sigma=self.gt_hm_sigma, thres_sigma_times=3,
+            )
+            action_trans = action_trans.view(bs, nc, h * w).transpose(1, 2).clone()
+        else:
+            action_trans = mvt_utils.generate_hm_from_pt(
+                wpt_img.reshape(-1, 2),
+                (h, w),
+                sigma=self.gt_hm_sigma,
+                thres_sigma_times=3,
+            )
+            action_trans = action_trans.view(bs, nc, h * w).transpose(1, 2).clone()
 
         return action_trans
 
