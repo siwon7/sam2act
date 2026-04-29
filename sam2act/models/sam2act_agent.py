@@ -791,31 +791,24 @@ class SAM2Act_Agent:
                         #   2) place_pc_in_cube: world → local cube coords
                         # We reconstruct the same transforms using rev_trans from primary.
                         max_peaks = alt_pos.shape[1]
+                        # Compute SE(3) translation shift (same for all peaks)
+                        original_xyz = replay_sample["gripper_pose"][:, -1, :3].float().to(self._device)
+                        aug_trans_shift = action_trans_con[:, :3].float().to(self._device) - original_xyz
                         alt_locals = []
                         for p_idx in range(max_peaks):
                             alt_p = alt_pos[:, p_idx, :]  # (bs, 3)
                             # Step 1: Apply same SE(3) translation shift as primary
-                            # action_trans_con has the augmented xyz, original was action_gripper_pose[:,:3]
-                            # The SE(3) aug applies: augmented_xyz = original_xyz + trans_shift
-                            # (rotation is applied to orientation, not to the translation position)
-                            # So trans_shift = action_trans_con - original_xyz
-                            original_xyz = replay_sample["gripper_pose"][:, -1, :3].float().to(self._device)
-                            aug_trans_shift = action_trans_con[:, :3].float().to(self._device) - original_xyz
                             alt_p_aug = alt_p + aug_trans_shift  # (bs, 3)
-                            # Step 2: Apply place_pc_in_cube using same rev_trans as primary
+                            # Step 2: Apply place_pc_in_cube using same augmented pc
                             alt_p_local = []
                             for b_i in range(len(rev_trans)):
-                                _alt = alt_p_aug[b_i]  # (3,)
-                                # rev_trans[b_i] is the reverse transform from place_pc_in_cube
-                                # place_pc_in_cube returns (wpt_local, rev_trans)
-                                # wpt_local = (wpt - mean_or_min) / scale
-                                # To apply same transform: use the pc that was already transformed
+                                _pc_i = pc[b_i] if isinstance(pc, list) else pc[b_i]
                                 _alt_local = mvt_utils.place_pc_in_cube(
-                                    pc[b_i] if isinstance(pc, list) else pc[b_i:b_i+1].squeeze(0),
-                                    _alt.unsqueeze(0),
+                                    _pc_i,
+                                    alt_p_aug[b_i].unsqueeze(0),  # (1, 3)
                                     with_mean_or_bounds=self._place_with_mean,
                                     scene_bounds=None if self._place_with_mean else self.scene_bounds,
-                                )[0]
+                                )[0].squeeze(0)  # (3,)
                                 alt_p_local.append(_alt_local)
                             alt_locals.append(torch.stack(alt_p_local, dim=0))  # (bs, 3)
                         alt_wpt_locals = torch.stack(alt_locals, dim=1)  # (bs, max_peaks, 3)
