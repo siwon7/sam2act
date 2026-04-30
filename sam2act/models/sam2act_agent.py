@@ -754,7 +754,7 @@ class SAM2Act_Agent:
             # Each sample gets augmented_pc + original_pc so the model sees both scenes
             if self.use_multipeak and ori_pc_cube is not None and backprop:
                 import random
-                se3_mixup_rate = 0.4
+                se3_mixup_rate = 0.1  # Lower rate: structural(25%) + SE3(~7%) ≈ 32% total multi-peak
                 se3_mixup_flags = [False] * len(pc)
                 for i in range(len(pc)):
                     if random.random() < se3_mixup_rate:
@@ -1286,14 +1286,18 @@ class SAM2Act_Agent:
                     structural_alt_hm += p_hm * p_mask.float().unsqueeze(-1).unsqueeze(-1)
 
             # Combine: primary + (structural alt OR SE(3) mixup)
-            # se3_mixup_flags is synced with point cloud concat in update()
+            # Apply multi-peak to first 3 views only (TGM-VLA style anchor)
+            # Remaining views keep single-peak as anchor for stable training
+            multipeak_views = min(3, nc)  # top, front, back
             combined_hm = primary_hm.view(bs, nc, h, w).clone()
             for b_i in range(bs):
                 has_alt_b = has_structural_alt and alt_wpt_mask[b_i].any()
                 if has_alt_b and structural_alt_hm is not None:
-                    combined_hm[b_i] += structural_alt_hm.view(bs, nc, h, w)[b_i]
+                    # Structural multi-peak (revisit/variation): 3 views only
+                    combined_hm[b_i, :multipeak_views] += structural_alt_hm.view(bs, nc, h, w)[b_i, :multipeak_views]
                 elif se3_mixup_flags[b_i] and ori_hm is not None:
-                    combined_hm[b_i] += ori_hm.view(bs, nc, h, w)[b_i]
+                    # SE(3) intra-mixup: 3 views only
+                    combined_hm[b_i, :multipeak_views] += ori_hm.view(bs, nc, h, w)[b_i, :multipeak_views]
 
             action_trans = combined_hm.view(bs, nc, h * w).transpose(1, 2).clone()
         else:
