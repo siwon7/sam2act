@@ -709,10 +709,13 @@ class SAM2Act_Agent:
 
             wpt_local = torch.cat(wpt_local, axis=0)
 
-            # Compute ori_wpt_local for SE(3) intra-mixup
+            # Compute ori_wpt_local and ori_pc_cube for SE(3) intra-mixup
             ori_wpt_local = None
+            ori_pc_cube = None
+            se3_mixup_flags = None
             if self.use_multipeak and ori_action_trans_con is not None and backprop:
-                ori_pc_moved, _ = rvt_utils.move_pc_in_bound(
+                import random
+                ori_pc_moved, ori_img_feat_moved = rvt_utils.move_pc_in_bound(
                     ori_pc, ori_img_feat, self.scene_bounds, no_op=not self.move_pc_in_bound
                 )
                 ori_wpt = [x[:3] for x in ori_action_trans_con]
@@ -727,6 +730,16 @@ class SAM2Act_Agent:
                     ori_wpt_local_list.append(a.unsqueeze(0))
                 ori_wpt_local = torch.cat(ori_wpt_local_list, axis=0)
 
+                # Also prepare ori_pc in cube coords for point cloud concat
+                ori_pc_cube = [
+                    mvt_utils.place_pc_in_cube(
+                        _pc,
+                        with_mean_or_bounds=self._place_with_mean,
+                        scene_bounds=None if self._place_with_mean else self.scene_bounds,
+                    )[0]
+                    for _pc in ori_pc_moved
+                ]
+
             # TODO: Vectorize
             pc = [
                 mvt_utils.place_pc_in_cube(
@@ -736,6 +749,18 @@ class SAM2Act_Agent:
                 )[0]
                 for _pc in pc
             ]
+
+            # SE(3) intra-mixup: concat point clouds + img_feat (TGM-VLA style)
+            # Each sample gets augmented_pc + original_pc so the model sees both scenes
+            if self.use_multipeak and ori_pc_cube is not None and backprop:
+                import random
+                se3_mixup_rate = 0.4
+                se3_mixup_flags = [False] * len(pc)
+                for i in range(len(pc)):
+                    if random.random() < se3_mixup_rate:
+                        se3_mixup_flags[i] = True
+                        pc[i] = torch.cat([pc[i], ori_pc_cube[i]], dim=0)
+                        img_feat[i] = torch.cat([img_feat[i], ori_img_feat_moved[i]], dim=0)
 
             bs = len(pc)
             nc = self._net_mod.num_img
@@ -841,6 +866,7 @@ class SAM2Act_Agent:
                 alt_wpt_locals=alt_wpt_locals,
                 alt_wpt_mask=alt_wpt_mask,
                 ori_wpt_local=ori_wpt_local,
+                se3_mixup_flags=se3_mixup_flags,
             )
 
         loss_log = {}
@@ -1164,6 +1190,7 @@ class SAM2Act_Agent:
         alt_wpt_locals=None,
         alt_wpt_mask=None,
         ori_wpt_local=None,
+        se3_mixup_flags=None,
     ):
         bs, nc, h, w = dims
         wpt_img = self._net_mod.get_pt_loc_on_img(
@@ -1181,12 +1208,9 @@ class SAM2Act_Agent:
                 out=out,
             )
             assert wpt_img2.shape[1] == 1
-
-            # (bs, 1, 2 * num_img, 2)
             wpt_img = torch.cat((wpt_img, wpt_img2), dim=-2)
             nc = nc * 2
 
-        # (bs, num_img, 2)
         wpt_img = wpt_img.squeeze(1)
 
         # Generate primary heatmap
@@ -1198,21 +1222,9 @@ class SAM2Act_Agent:
         )  # (bs*nc, h, w)
 
         if self.use_multipeak and self._network.training:
-            import random
-
-            # Decide per-sample: structural multi-peak or SE(3) intra-mixup
             has_structural_alt = (alt_wpt_locals is not None and alt_wpt_mask is not None)
-
-            # Build per-sample mixup decision
-            # Samples WITH structural alt → use structural multi-peak
-            # Samples WITHOUT → apply SE(3) intra-mixup with 40% probability
-            se3_mixup_rate = 0.4
-            se3_mixup_flags = [False] * bs
-            if ori_wpt_local is not None:
-                for b_i in range(bs):
-                    has_alt_b = has_structural_alt and alt_wpt_mask[b_i].any()
-                    if not has_alt_b and random.random() < se3_mixup_rate:
-                        se3_mixup_flags[b_i] = True
+            if se3_mixup_flags is None:
+                se3_mixup_flags = [False] * bs
 
             # Generate SE(3) intra-mixup heatmap (original pre-aug target)
             ori_hm = None
@@ -1237,7 +1249,7 @@ class SAM2Act_Agent:
                     (h, w),
                     sigma=self.gt_hm_sigma,
                     thres_sigma_times=3,
-                )  # (bs*nc, h, w)
+                )
 
             # Generate structural multi-peak alt heatmap
             structural_alt_hm = None
@@ -1260,7 +1272,7 @@ class SAM2Act_Agent:
                         )
                         alt_img = torch.cat((alt_img, alt_img2), dim=-2)
                     alt_wpt_imgs.append(alt_img.squeeze(1))
-                alt_wpt_imgs_t = torch.stack(alt_wpt_imgs, dim=1)  # (bs, peaks, nc, 2)
+                alt_wpt_imgs_t = torch.stack(alt_wpt_imgs, dim=1)
 
                 structural_alt_hm = torch.zeros_like(primary_hm)
                 for p in range(max_peaks):
@@ -1270,20 +1282,17 @@ class SAM2Act_Agent:
                         sigma=self.gt_hm_sigma,
                         thres_sigma_times=3,
                     )
-                    # Mask: only add for samples that have this alt
                     p_mask = alt_wpt_mask[:, p].unsqueeze(1).expand(-1, nc).reshape(-1)
                     structural_alt_hm += p_hm * p_mask.float().unsqueeze(-1).unsqueeze(-1)
 
-            # Combine: primary + (structural alt OR SE(3) mixup), per sample
-            # TGM-VLA style: sum without re-normalization
+            # Combine: primary + (structural alt OR SE(3) mixup)
+            # se3_mixup_flags is synced with point cloud concat in update()
             combined_hm = primary_hm.view(bs, nc, h, w).clone()
             for b_i in range(bs):
                 has_alt_b = has_structural_alt and alt_wpt_mask[b_i].any()
                 if has_alt_b and structural_alt_hm is not None:
-                    # Structural multi-peak: add alt peaks
                     combined_hm[b_i] += structural_alt_hm.view(bs, nc, h, w)[b_i]
                 elif se3_mixup_flags[b_i] and ori_hm is not None:
-                    # SE(3) intra-mixup: add original target as second peak
                     combined_hm[b_i] += ori_hm.view(bs, nc, h, w)[b_i]
 
             action_trans = combined_hm.view(bs, nc, h * w).transpose(1, 2).clone()
