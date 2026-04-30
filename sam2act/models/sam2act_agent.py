@@ -1288,11 +1288,12 @@ class SAM2Act_Agent:
             # Combine: primary + (structural alt OR SE(3) mixup)
             # Apply multi-peak to first 3 views only (TGM-VLA style anchor)
             # Remaining views keep single-peak as anchor for stable training
-            # Apply multi-peak to subset of views, keep rest as anchor
-            # TGM-VLA uses 3/5 views. With rend_three_views=True (nc=3),
-            # use 2/3 views for multi-peak, keep 1 view as anchor
-            multipeak_views = max(1, nc - 1)  # nc=3 → 2 views multi-peak, 1 anchor
-                                               # nc=5 → 4 views multi-peak, 1 anchor
+            # Apply multi-peak to stage1 views only, keep stage2 views as anchor
+            # TGM-VLA: action_trans[i][:, :3] = mixup (3/6 views, 50% anchor)
+            # nc may be doubled (stage_two): original 3 views → 6 total
+            # Multi-peak goes to first half (stage1 views), second half stays anchor
+            num_render_views = nc // 2 if (self.stage_two and not self.use_memory) else nc
+            multipeak_views = num_render_views  # stage1 views only = 3/6 = 50% anchor
             combined_hm = primary_hm.view(bs, nc, h, w).clone()
             for b_i in range(bs):
                 has_alt_b = has_structural_alt and alt_wpt_mask[b_i].any()
