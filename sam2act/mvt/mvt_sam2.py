@@ -93,6 +93,35 @@ class MVT_SAM2(nn.Module):
         sam2_ckpt,
         use_memory,
         num_maskmem,
+        graph_node_classes,
+        enable_task_memory_routing=False,
+        enable_dual_memory=False,
+        enable_event_memory=False,
+        enable_event_write=False,
+        enable_local_event_fusion=False,
+        enable_adaptive_event_prune=False,
+        enable_heatmap_event_features=False,
+        edge_bias_enabled=False,
+        edge_bias_lambda=0.0,
+        edge_bias_temporal_scale=0.0,
+        edge_bias_revisit_scale=0.0,
+        edge_bias_transition_scale=0.0,
+        edge_bias_revisit_sigma=0.25,
+        edge_bias_ref_match_threshold=0.05,
+        edge_bias_transition_hop=1,
+        use_multipeak=False,
+        multipeak_mode="both",
+        multipeak_targets_json="",
+        multipeak_cluster_radius=0.04,
+        multipeak_max_peaks=5,
+        use_graph_peak_select=False,
+        graph_node_embed_dim=64,
+        graph_peak_topk=3,
+        graph_peak_select_loss_weight=0.5,
+        graph_transition_loss_weight=0.1,
+        graph_contrastive_loss_weight=0.05,
+        graph_contrastive_temperature=0.1,
+        graph_contrastive_pos_radius=0.03,
         renderer_device="cuda:0",
     ):
         """MultiView Transfomer
@@ -169,6 +198,15 @@ class MVT_SAM2(nn.Module):
         self.sam2_ckpt = sam2_ckpt
         self.use_memory = use_memory
         self.num_maskmem = num_maskmem
+        self.graph_node_classes = graph_node_classes
+        self.edge_bias_enabled = edge_bias_enabled
+        self.edge_bias_lambda = edge_bias_lambda
+        self.edge_bias_temporal_scale = edge_bias_temporal_scale
+        self.edge_bias_revisit_scale = edge_bias_revisit_scale
+        self.edge_bias_transition_scale = edge_bias_transition_scale
+        self.edge_bias_revisit_sigma = edge_bias_revisit_sigma
+        self.edge_bias_ref_match_threshold = edge_bias_ref_match_threshold
+        self.edge_bias_transition_hop = edge_bias_transition_hop
 
         if self.ifSAM2:
             # sam2 = build_sam2_custom(self.sam2_config, self.sam2_ckpt, device="cuda", image_size=self.img_size if not self.resize_rgb else 256) #, num_maskmem=self.num_maskmem)

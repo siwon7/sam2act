@@ -23,3 +23,18 @@ use_memory: True
 sam2_config: /configs/sam2.1/sam2.1_hiera_b+
 sam2_ckpt: ./mvt/sam2_train/checkpoints/sam2.1_hiera_base_plus.pt
 num_maskmem: 9
+
+# Stage1 multi-peak labels for ambiguous keyframes
+# NOTE: requires regenerating replay data (delete existing disk cache)
+use_multipeak: False
+# Options: "intra", "cross", "both"
+#   intra: within-episode ambiguity only (KF4 vs KF7 etc.)
+#   cross: cross-variation ambiguity only (same step, different variation targets)
+#   both:  union of intra + cross
+multipeak_mode: "both"
+# Path to precomputed JSON. Use {task} placeholder for multi-task:
+#   e.g. "data_memory/multipeak_targets/{task}_multipeak_both.json"
+multipeak_targets_json: "data_memory/multipeak_targets/{task}_multipeak_both.json"
+
+# Stage2 graph peak selector
+use_graph_peak_select: False

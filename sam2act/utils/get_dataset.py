@@ -169,6 +169,7 @@ def get_dataset_temporal(
     num_maskmem,
     rank,
     sample_distribution_mode="transition_uniform",
+    multipeak_targets_json="",
 ):
 
     train_replay_buffer = create_replay_temporal(
@@ -222,6 +223,11 @@ def get_dataset_temporal(
                 print(f"remove {test_replay_storage_folder}")
 
         # print("----- Train Buffer -----")
+        # Resolve multipeak JSON path for this task
+        _mp_json = multipeak_targets_json
+        if _mp_json and "{task}" in _mp_json:
+            _mp_json = _mp_json.replace("{task}", task)
+
         fill_replay_temporal(
             replay=train_replay_buffer,
             task=task,
@@ -241,6 +247,7 @@ def get_dataset_temporal(
             clip_model=clip_model,
             device=device,
             rank=rank,
+            multipeak_targets_json=_mp_json,
         )
 
         if not only_train:

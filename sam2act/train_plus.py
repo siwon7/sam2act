@@ -269,6 +269,7 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
         sample_distribution_mode=exp_cfg.sample_distribution_mode,
         num_maskmem=mvt_cfg.num_maskmem,
         rank=rank,
+        multipeak_targets_json=mvt_cfg.multipeak_targets_json if mvt_cfg.use_multipeak else "",
     )
     train_dataset, _ = get_dataset_func()
     t_end = time.time()
@@ -302,6 +303,13 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
             cos_dec_max_step=EPOCHS * TRAINING_ITERATIONS,
             use_memory=mvt_cfg.use_memory,
             num_maskmem=mvt_cfg.num_maskmem,
+            use_multipeak=mvt_cfg.use_multipeak,
+            use_graph_peak_select=mvt_cfg.use_graph_peak_select,
+            graph_peak_select_loss_weight=mvt_cfg.graph_peak_select_loss_weight,
+            graph_transition_loss_weight=mvt_cfg.graph_transition_loss_weight,
+            graph_contrastive_loss_weight=mvt_cfg.graph_contrastive_loss_weight,
+            graph_contrastive_temperature=mvt_cfg.graph_contrastive_temperature,
+            graph_contrastive_pos_radius=mvt_cfg.graph_contrastive_pos_radius,
             **exp_cfg.peract,
             **exp_cfg.rvt,
         )

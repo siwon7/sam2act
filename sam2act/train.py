@@ -251,15 +251,15 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
     )
 
     t_start = time.time()
+    _replay_dir = TRAIN_REPLAY_STORAGE_DIR_MEM if cmd_args.use_memory_data else TRAIN_REPLAY_STORAGE_DIR
+    _data_folder = DATA_FOLDER_MEM if cmd_args.use_memory_data else DATA_FOLDER
     get_dataset_func = lambda: get_dataset_temporal(
         tasks,
         BATCH_SIZE_TRAIN,
         None,
-        TRAIN_REPLAY_STORAGE_DIR,               # uncomment this line if training with RLBench
-        # TRAIN_REPLAY_STORAGE_DIR_MEM,           # uncomment this line if training with MemoryBench
+        _replay_dir,
         None,
-        DATA_FOLDER,                            # uncomment this line if training with RLBench
-        # DATA_FOLDER_MEM,                        # uncomment this line if training with MemoryBench
+        _data_folder,
         NUM_TRAIN,
         None,
         cmd_args.refresh_replay,
@@ -269,6 +269,7 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
         sample_distribution_mode=exp_cfg.sample_distribution_mode,
         num_maskmem=mvt_cfg.num_maskmem,
         rank=rank,
+        multipeak_targets_json=mvt_cfg.multipeak_targets_json if mvt_cfg.use_multipeak else "",
     )
     train_dataset, _ = get_dataset_func()
     t_end = time.time()
@@ -300,6 +301,7 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
             cameras=CAMERAS,
             log_dir=f"{log_dir}/test_run/",
             cos_dec_max_step=EPOCHS * TRAINING_ITERATIONS,
+            use_multipeak=mvt_cfg.use_multipeak,
             **exp_cfg.peract,
             **exp_cfg.rvt,
         )
@@ -385,6 +387,7 @@ if __name__ == "__main__":
     parser.set_defaults(entry=lambda cmd_args: parser.print_help())
 
     parser.add_argument("--refresh_replay", action="store_true", default=False)
+    parser.add_argument("--use-memory-data", action="store_true", default=False)
     parser.add_argument("--device", type=str, default="0")
     parser.add_argument("--mvt_cfg_path", type=str, default="")
     parser.add_argument("--exp_cfg_path", type=str, default="")
