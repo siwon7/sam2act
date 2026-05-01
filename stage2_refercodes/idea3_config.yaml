@@ -1,0 +1,118 @@
+# =============================================================================
+# Idea 3: Dual-Level Memory with Episodic Graph
+# Configuration for Stage2 training with graph-guided peak selection
+# =============================================================================
+
+# --- Episodic Graph Memory ---
+episodic_graph:
+  enabled: true
+
+  # Node embedding dimension (compact representation per keyframe)
+  node_dim: 64
+
+  # Feature dimension from SAM2 encoder / memory attention
+  feat_dim: 128
+
+  # Language embedding dimension (from CLIP or similar)
+  lang_dim: 128
+
+  # Maximum nodes stored in the episodic graph per episode
+  # SAM2Act keyframes: put_block_back=12, rearrange_block=11, reopen_drawer=10
+  max_graph_nodes: 24
+
+# --- Peak Extraction ---
+peak_extraction:
+  # Maximum candidate peaks per view
+  max_peaks: 3
+
+  # NMS suppression radius in pixels (avoids duplicate peaks)
+  nms_radius: 5
+
+  # Minimum relative score threshold for a peak (fraction of max)
+  score_threshold: 0.05
+
+# --- Ambiguity Gate ---
+ambiguity_gate:
+  # Entropy threshold for triggering graph-guided selection
+  # Higher = fewer keyframes activate the graph (more selective)
+  # Lower  = more keyframes use graph (less selective, more compute)
+  # Calibrated: ~20-30% of keyframes should be ambiguous (matches analysis)
+  entropy_threshold: 0.3
+
+# --- Heatmap Reweighting ---
+reweighting:
+  # Gaussian sigma for blending peak weights back into heatmap (pixels)
+  sigma: 5.0
+
+# --- Loss Weights ---
+loss:
+  # Peak selection cross-entropy loss weight
+  lambda_peak: 1.0
+
+  # Node contrastive loss weight (same-position nodes -> similar embeds)
+  lambda_contrastive: 0.1
+
+  # Transition prediction loss weight (prev+curr -> next)
+  lambda_transition: 0.5
+
+  # Contrastive loss: 3D distance threshold for positive pairs (metres)
+  contrastive_pos_threshold: 0.05
+
+  # Contrastive loss: margin for negative pairs
+  contrastive_margin: 0.5
+
+# --- Training ---
+training:
+  # Stage1 weights are frozen during Stage2 training
+  freeze_stage1: true
+
+  # Learning rate for graph modules only (rest uses SAM2Act defaults)
+  graph_lr: 1.0e-4
+
+  # Weight decay for graph modules
+  graph_weight_decay: 1.0e-5
+
+  # Epochs for Stage2 (graph + SAM2 memory joint training)
+  epochs: 50
+
+  # Batch size (same as SAM2Act Stage2 default)
+  batch_size: 1
+
+  # Gradient accumulation steps
+  grad_accum_steps: 4
+
+  # Whether to train SAM2 memory attention alongside graph modules
+  train_memory_attention: true
+
+  # Whether to train the memory encoder
+  train_memory_encoder: false
+
+# --- Inference ---
+inference:
+  # Whether to use ambiguity gate (set false to always run graph)
+  use_ambiguity_gate: true
+
+  # Temperature for peak selection softmax during inference
+  # Lower = sharper selection (closer to argmax)
+  peak_temperature: 0.5
+
+# --- Ablation Flags ---
+ablation:
+  # Disable language conditioning in TransitionScorer
+  # (uses zero vector instead of lang_emb)
+  no_language: false
+
+  # Disable ambiguity gate (always run graph on every keyframe)
+  no_gate: false
+
+  # Disable contrastive loss on node embeddings
+  no_contrastive: false
+
+  # Disable transition prediction loss
+  no_transition: false
+
+  # Use only episodic graph (no SAM2 spatial memory)
+  graph_only: false
+
+  # Use only SAM2 spatial memory (no episodic graph) - baseline comparison
+  memory_only: false

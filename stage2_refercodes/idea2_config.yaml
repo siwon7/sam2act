@@ -1,0 +1,159 @@
+# =============================================================================
+# Idea 2: FiLM-Conditioned Keyframe Memory — Configuration
+# =============================================================================
+#
+# This config controls the FiLM memory attention module that augments
+# SAM2Act's existing memory cross-attention with language and phase conditioning.
+#
+# Integration: loaded by mvt_sam2_single.py alongside existing SAM2 config.
+# The FiLM module does NOT replace SAM2 memory attention; it generates
+# an additive attention bias injected via the memory_attn_mask argument.
+
+# ---------------------------------------------------------------------------
+# Module architecture
+# ---------------------------------------------------------------------------
+film_memory:
+  enabled: true
+
+  # Must match SAM2 memory attention d_model
+  d_model: 256
+
+  # Language embedding dimension (from CLIP or existing lang encoder)
+  lang_dim: 128
+
+  # Node embedding dimension (compact representation of task-graph position)
+  node_dim: 64
+
+  # Number of attention heads for FiLM bias generation
+  # Should divide into SAM2's num_heads; use 1 for broadcast across all heads,
+  # or match SAM2's num_heads (typically 8) for per-head control.
+  num_heads: 1  # 1 = same bias for all SAM2 heads (simplest, recommended)
+
+  # Phase predictor sub-module
+  phase_predictor:
+    num_layers: 2
+    num_heads: 4
+    max_history: 16    # max keyframes tracked per episode (MemoryBench max ~12)
+    dropout: 0.1
+
+  # FiLM bias generator sub-module
+  film_bias_generator:
+    hidden_dim: 128
+
+# ---------------------------------------------------------------------------
+# Training losses
+# ---------------------------------------------------------------------------
+losses:
+  # Node contrastive loss (InfoNCE on node embeddings)
+  node_contrastive:
+    enabled: true
+    weight: 0.1                  # lambda_contrastive
+    position_threshold: 0.05     # 5cm — nodes closer than this are positives
+    temperature: 0.1
+
+  # Attention bias L2 regularization
+  bias_regularization:
+    enabled: true
+    weight: 0.01                 # keeps bias as gentle modulation
+
+  # Main heatmap loss (unchanged from baseline)
+  heatmap:
+    weight: 1.0                  # lambda_heatmap (same as baseline)
+
+# ---------------------------------------------------------------------------
+# Training schedule
+# ---------------------------------------------------------------------------
+training:
+  # Stage1 weights are frozen; only FiLM module + SAM2 memory attention train
+  freeze_stage1: true
+
+  # Learning rate for FiLM module parameters
+  lr: 1.0e-4
+  weight_decay: 1.0e-5
+
+  # Warmup for FiLM bias (start with zero bias, ramp up)
+  bias_warmup_steps: 500
+
+  # Gradient clipping
+  max_grad_norm: 1.0
+
+  # Epochs
+  num_epochs: 50
+  eval_every: 5
+
+# ---------------------------------------------------------------------------
+# Integration points (file paths relative to sam2act/)
+# ---------------------------------------------------------------------------
+#
+# integration:
+#   # Files to modify (see integration instructions below):
+#   memory_attention: "mvt/sam2_train/modeling/memory_attention.py"
+#   transformer: "mvt/sam2_train/modeling/sam/transformer.py"
+#   mvt_single: "mvt/mvt_sam2_single.py"
+#   agent: "sam2act_agent.py"
+#
+# ---------------------------------------------------------------------------
+# Integration instructions (minimal changes to existing code)
+# ---------------------------------------------------------------------------
+#
+# CHANGE 1: memory_attention.py — MemoryAttention.forward()
+#   - The existing code already passes memory_attn_mask through to layers.
+#   - No change needed here. The FiLM bias is added to memory_attn_mask
+#     BEFORE calling MemoryAttention.forward() in mvt_sam2_single.py.
+#
+# CHANGE 2: transformer.py — RoPEAttention.forward()
+#   - Already accepts attn_mask in F.scaled_dot_product_attention.
+#   - No change needed. The attn_mask flows through correctly.
+#
+# CHANGE 3: mvt_sam2_single.py (main integration point)
+#   Add to __init__:
+#     from idea2_film_memory import FiLMConditionedMemoryAttention
+#     self.film_module = FiLMConditionedMemoryAttention(**film_config)
+#
+#   Add to forward() where memory attention is called:
+#     # --- FiLM bias computation ---
+#     memory_node_embeds = self.film_module.get_memory_node_embeds()
+#     if memory_node_embeds is not None:
+#         film_bias = self.film_module.compute_bias(lang_emb, memory_node_embeds)
+#         # Expand bias to match SAM2 attention shape if num_heads=1
+#         # SAM2 uses [B, H, N_q, N_kv] for attn_mask
+#         if memory_attn_mask is not None:
+#             memory_attn_mask = memory_attn_mask + film_bias
+#         else:
+#             memory_attn_mask = film_bias
+#
+#     # --- Existing SAM2 memory attention call (unchanged) ---
+#     output = self.memory_attention(
+#         curr=curr, memory=memory,
+#         curr_pos=curr_pos, memory_pos=memory_pos,
+#         memory_attn_mask=memory_attn_mask,
+#         num_obj_ptr_tokens=num_obj_ptr_tokens,
+#     )
+#
+#     # --- Extract and store node embedding ---
+#     # SAM2 MemoryAttention returns normed_output in seq-first [N, B, D] format
+#     node_emb = self.film_module.extract_node_embed(output, batch_first=False)
+#     self.film_module.update_history(node_emb)
+#     self.film_module.add_memory_node_embed(node_emb)
+#
+#   Add to reset/episode boundary:
+#     self.film_module.reset_episode()
+#
+# CHANGE 4: sam2act_agent.py (loss computation)
+#   Add FiLM auxiliary losses to total loss:
+#     film_losses = self.film_loss_module(
+#         node_embeds=collected_node_embeds,
+#         positions_3d=collected_positions,
+#         attn_bias=collected_biases,
+#     )
+#     total_loss += (
+#         config.losses.node_contrastive.weight * film_losses["loss_node_contrastive"]
+#         + config.losses.bias_regularization.weight * film_losses["loss_bias_reg"]
+#     )
+#
+# SUMMARY OF CHANGES:
+#   memory_attention.py  — NO CHANGES (attn_mask already supported)
+#   transformer.py       — NO CHANGES (attn_mask already supported)
+#   mvt_sam2_single.py   — ~20 lines added (init + forward + reset)
+#   sam2act_agent.py     — ~10 lines added (loss computation)
+#   Total: ~30 lines of integration code

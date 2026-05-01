@@ -1,0 +1,79 @@
+# ============================================================================
+# Idea 4: Contrastive Phase-Aware Memory Selection
+# ============================================================================
+#
+# This config mirrors the style of sam2act_plus.yaml.
+# Add these keys under the `mvt` section of the main config,
+# or pass them via command-line overrides.
+#
+# Minimal change: set use_contrastive_phase: True and point
+# contrastive_phase_targets_json to the precomputed multipeak JSON.
+# ============================================================================
+
+# --- Enable/Disable ---
+use_contrastive_phase: False    # master switch
+
+# --- Phase Encoder ---
+phase_embed_dim: 64             # phase embedding dimension
+# feat_dim is inherited from the model (128 for SAM2Act default)
+# proprio_dim is inherited from the model (4 for SAM2Act default)
+
+# --- Peak Extraction ---
+phase_peak_topk: 3              # max peaks per view
+phase_nms_kernel: 5             # NMS kernel size for peak extraction
+
+# --- Contrastive Learning ---
+phase_contrastive_temperature: 0.07    # InfoNCE temperature
+phase_contrastive_pos_radius: 0.03     # 3D dist for positive pairs (meters)
+phase_contrastive_neg_margin: 0.10     # target-divergence for hard negatives
+phase_contrastive_grip_match: True     # require same gripper state for positives
+
+# --- Loss Weights ---
+phase_contrastive_loss_weight: 0.1     # contrastive loss coefficient
+phase_peak_selection_loss_weight: 0.5  # peak selection CE loss coefficient
+phase_consistency_loss_weight: 0.05    # temporal smoothness coefficient
+
+# --- Warmup ---
+phase_warmup_steps: 500                # don't apply peak_selection_loss before this
+
+# --- Multipeak Targets (precomputed JSON) ---
+# Path to the JSON file from precompute_multipeak_targets.py
+# Used for:
+#   1. Identifying which keyframes are ambiguous
+#   2. Providing GT alternative targets for peak_selection_loss
+# Example: sam2act/data_memory/multipeak_targets/put_block_back_multipeak_both.json
+contrastive_phase_targets_json: ""
+
+# ============================================================================
+# Example full training command:
+# ============================================================================
+#
+#   python sam2act/train.py \
+#       method.use_contrastive_phase=True \
+#       method.phase_contrastive_loss_weight=0.1 \
+#       method.phase_peak_selection_loss_weight=0.5 \
+#       method.contrastive_phase_targets_json="sam2act/data_memory/multipeak_targets/put_block_back_multipeak_both.json" \
+#       ...
+#
+# ============================================================================
+# Ablation presets:
+# ============================================================================
+#
+# --- Contrastive-only (no peak selection, pure phase discovery) ---
+# phase_peak_selection_loss_weight: 0.0
+# phase_contrastive_loss_weight: 0.2
+#
+# --- Peak-selection-only (no contrastive, just learns to pick peaks) ---
+# phase_contrastive_loss_weight: 0.0
+# phase_peak_selection_loss_weight: 1.0
+#
+# --- Aggressive hard-negative mining (for severe revisit ambiguity) ---
+# phase_contrastive_temperature: 0.05
+# phase_contrastive_pos_radius: 0.02
+# phase_contrastive_neg_margin: 0.08
+#
+# --- Conservative (for tasks with less ambiguity) ---
+# phase_contrastive_temperature: 0.1
+# phase_contrastive_pos_radius: 0.05
+# phase_contrastive_loss_weight: 0.05
+# ============================================================================

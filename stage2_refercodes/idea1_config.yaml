@@ -1,0 +1,160 @@
+# =============================================================================
+# GPSN (Graph-Guided Peak Selection Network) — Idea 1 Experiment Config
+# =============================================================================
+# Stage2 fine-tuning config for SAM2Act + GPSN
+# Base: sam2act_plus.yaml
+# Prereq: Stage1 multi-peak weights (v6.1)
+#
+# Usage:
+#   python train_plus.py --cfg sam2act_plus --mvt_cfg sam2act_plus \
+#       --override_mvt_cfg idea1_config.yaml
+# =============================================================================
+
+# --- Experiment metadata ---
+exp_id: gpsn_v1
+exp_name: graph_peak_select
+wandb: True
+tasks: put_block_back,reopen_drawer,rearrange_block
+agent: our
+
+# --- Data ---
+demo: 100
+bs: 10                         # batch size (num_obs_per_seq * num_seq)
+num_workers: 5
+
+# --- Training schedule ---
+epochs: 20
+peract:
+  lr: 1.25e-6                 # same as baseline Stage2
+  warmup_steps: 2000
+  optimizer_type: lamb
+  lr_cos_dec: True
+  transform_augmentation_xyz: [0.125, 0.125, 0.125]
+  transform_augmentation_rpy: [0.0, 0.0, 45.0]
+  same_trans_aug_per_seq: False
+  amp: True
+  bnb: True
+  lambda_weight_l2: 1.0e-4
+
+rvt:
+  place_with_mean: False
+  img_aug: 0.0
+
+# --- MVT architecture (inherits sam2act_plus.yaml) ---
+stage_two: True
+norm_corr: True
+rend_three_views: True
+use_point_renderer: True
+inp_pre_pro: False
+inp_pre_con: False
+feat_ver: 1
+img_size: 224
+img_patch_size: 14
+cvx_up: True
+xops: True
+rot_ver: 1
+st_wpt_loc_inp_no_noise: True
+wpt_img_aug: 0.0
+img_aug_2: 0.05
+im_channels: 64
+
+# --- SAM2 backbone ---
+ifSAM2: True
+lora_finetune: True
+lora_r: 16
+ifsep: False
+resize_rgb: True
+sam2_config: /configs/sam2.1/sam2.1_hiera_b+
+sam2_ckpt: ./mvt/sam2_train/checkpoints/sam2.1_hiera_base_plus.pt
+
+# --- Memory ---
+use_memory: True
+num_maskmem: 9
+
+# --- Stage1 multi-peak (required for GPSN) ---
+use_multipeak: True
+multipeak_mode: both
+multipeak_cluster_radius: 0.04
+multipeak_max_peaks: 5
+
+# =============================================================================
+# GPSN-specific parameters
+# =============================================================================
+
+# Master toggle
+use_graph_peak_select: True
+
+# Node embedding dimension (shared by PeakNodeEmbedding, NodeEmbedHead, TransitionScorer)
+graph_node_embed_dim: 64
+
+# Number of candidate peaks to extract from Stage1 heatmap
+graph_peak_topk: 3
+
+# --- Loss weights ---
+# Peak selection CE loss (select correct peak among k candidates)
+graph_peak_select_loss_weight: 0.5
+
+# Transition prediction loss (prev+curr -> next node)
+graph_transition_loss_weight: 0.1
+
+# Node contrastive loss (InfoNCE on node embeddings by 3D position)
+graph_contrastive_loss_weight: 0.05
+
+# InfoNCE temperature
+graph_contrastive_temperature: 0.1
+
+# 3D distance threshold for positive pairs in contrastive loss (meters)
+graph_contrastive_pos_radius: 0.03
+
+# --- Ambiguity gate ---
+# Mode: "entropy" (heatmap entropy), "ratio" (2nd/1st peak ratio), "both"
+graph_ambiguity_mode: entropy
+
+# Normalized entropy threshold (0-1 scale). Higher = more selective
+# 0.3 means ~top 25% most ambiguous steps activate graph
+graph_entropy_threshold: 0.3
+
+# 2nd-peak / 1st-peak softmax ratio threshold (used if mode=ratio or both)
+graph_ratio_threshold: 0.5
+
+# --- Heatmap reweighting ---
+# Gaussian sigma for reweight blobs (in encoder patch units)
+graph_reweight_sigma: 3.0
+
+# Language embedding pooling mode: mean, first, max
+graph_lang_pool_mode: mean
+
+
+# =============================================================================
+# Ablation configs (uncomment one block at a time)
+# =============================================================================
+
+# --- Ablation A: No language conditioning (task-agnostic transition) ---
+# Modify TransitionScorer to ignore lang_emb (zero out FiLM)
+# graph_ablation_no_lang: True
+
+# --- Ablation B: No ambiguity gate (always use graph) ---
+# graph_entropy_threshold: 0.0   # effectively always ambiguous
+# graph_ratio_threshold: 0.0
+
+# --- Ablation C: No contrastive loss ---
+# graph_contrastive_loss_weight: 0.0
+
+# --- Ablation D: No transition loss ---
+# graph_transition_loss_weight: 0.0
+
+# --- Ablation E: Larger graph (more peaks) ---
+# graph_peak_topk: 5
+# graph_reweight_sigma: 2.0
+
+# --- Ablation F: Baseline (GPSN disabled) ---
+# use_graph_peak_select: False
+
+
+# =============================================================================
+# Per-task analysis targets (for evaluation scripts)
+# =============================================================================
+# Ambiguous keyframes to track:
+#   put_block_back:  KF4 (button), KF7 (place down), KF9 (original patch)
+#   reopen_drawer:   KF0 (approach drawer), KF4 (button), KF6 (reopen)
+#   rearrange_block: none (visual cues sufficient)
