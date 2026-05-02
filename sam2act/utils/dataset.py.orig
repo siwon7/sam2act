@@ -258,8 +258,6 @@ def create_replay_temporal(
         ]
     )
 
-    multipeak_max_peaks = 5
-
     extra_replay_elements = [
         ReplayElement("demo", (), bool),
         ReplayElement("keypoint_idx", (), int),
@@ -268,9 +266,6 @@ def create_replay_temporal(
         ReplayElement("next_keypoint_frame", (), int),
         ReplayElement("sample_frame", (), int),
         ReplayElement("initial_frame", (), int),
-        # Multi-peak: alternative targets for truly ambiguous keyframes
-        ReplayElement("alt_target_positions", (multipeak_max_peaks, 3), np.float32),
-        ReplayElement("alt_target_mask", (multipeak_max_peaks,), np.bool_),
     ]
 
     replay_buffer = (
@@ -368,8 +363,6 @@ def _add_keypoints_to_replay(
     description: str = "",
     clip_model=None,
     device="cpu",
-    ep_alt_positions=None,
-    ep_alt_mask=None,
 ):
     prev_action = None
     obs = inital_obs
@@ -416,14 +409,6 @@ def _add_keypoints_to_replay(
             keypoint_frame = -1
         else:
             keypoint_frame = episode_keypoints[k - 1]
-        # Multi-peak alt targets for this keyframe
-        if ep_alt_positions is not None and ep_alt_mask is not None:
-            kf_alt_pos = ep_alt_positions[k]    # (max_peaks, 3)
-            kf_alt_msk = ep_alt_mask[k]         # (max_peaks,)
-        else:
-            kf_alt_pos = np.zeros((5, 3), dtype=np.float32)
-            kf_alt_msk = np.zeros((5,), dtype=np.bool_)
-
         others = {
             "demo": True,
             "keypoint_idx": k,
@@ -431,8 +416,6 @@ def _add_keypoints_to_replay(
             "keypoint_frame": keypoint_frame,
             "next_keypoint_frame": keypoint,
             "sample_frame": sample_frame,
-            "alt_target_positions": kf_alt_pos,
-            "alt_target_mask": kf_alt_msk,
         }
         final_obs = {
             "trans_action_indicies": trans_indicies,
@@ -490,16 +473,7 @@ def fill_replay(
     variation_desriptions_pkl: str,
     clip_model=None,
     device="cpu",
-    multipeak_targets_json: str = "",
 ):
-
-    # Load precomputed multi-peak targets if provided
-    multipeak_targets = None
-    if multipeak_targets_json and os.path.exists(multipeak_targets_json):
-        import json as _json
-        with open(multipeak_targets_json) as _f:
-            multipeak_targets = _json.load(_f)
-        print(f"[Info] Loaded multi-peak targets: {multipeak_targets_json}")
 
     disk_exist = False
     if replay._disk_saving:
@@ -532,29 +506,6 @@ def fill_replay(
 
             # extract keypoints
             episode_keypoints = keypoint_discovery(demo)  # list of keypoint   [id0, id1, id2]
-
-            # Multi-peak alt targets: load from precomputed JSON or compute on-the-fly (intra only)
-            num_kf = len(episode_keypoints)
-            ep_alt_positions = None
-            ep_alt_mask = None
-            if multipeak_targets is not None and str(d_idx) in multipeak_targets:
-                mp = multipeak_targets[str(d_idx)]
-                ep_alt_positions = np.array(mp["alt_positions"], dtype=np.float32)[:num_kf]
-                ep_alt_mask = np.array(mp["alt_mask"], dtype=bool)[:num_kf]
-            else:
-                # Fallback: compute intra-episode only
-                from sam2act.mvt.multipeak_utils import collect_alt_targets
-                kf_poses = np.array([
-                    demo[episode_keypoints[k]].gripper_pose for k in range(num_kf)
-                ], dtype=np.float32)
-                kf_opens = np.array([
-                    demo[episode_keypoints[k]].gripper_open for k in range(num_kf)
-                ], dtype=np.float32)
-                ep_alt_positions, ep_alt_mask = collect_alt_targets(
-                    kf_poses, kf_opens, num_kf, max_peaks=3,
-                    spatial_only=True,  # v7: cluster by EE position only
-                )
-
             next_keypoint_idx = 0
             for i in range(len(demo) - 1):
                 if not demo_augmentation and i > 0:
@@ -590,8 +541,6 @@ def fill_replay(
                     description=desc,
                     clip_model=clip_model,
                     device=device,
-                    ep_alt_positions=ep_alt_positions,
-                    ep_alt_mask=ep_alt_mask,
                 )
 
         # save TERMINAL info in replay_info.npy
@@ -632,8 +581,6 @@ def _add_keypoints_to_replay_temporal(
     description: str = "",
     clip_model=None,
     device="cpu",
-    ep_alt_positions=None,
-    ep_alt_mask=None,
 ):
     prev_action = None
     obs = inital_obs
@@ -681,14 +628,6 @@ def _add_keypoints_to_replay_temporal(
             keypoint_frame = -1
         else:
             keypoint_frame = episode_keypoints[k - 1]
-        # Multi-peak alt targets
-        if ep_alt_positions is not None and ep_alt_mask is not None:
-            kf_alt_pos = ep_alt_positions[k]
-            kf_alt_msk = ep_alt_mask[k]
-        else:
-            kf_alt_pos = np.zeros((5, 3), dtype=np.float32)
-            kf_alt_msk = np.zeros((5,), dtype=np.bool_)
-
         others = {
             "demo": True,
             "keypoint_idx": k,
@@ -697,8 +636,6 @@ def _add_keypoints_to_replay_temporal(
             "next_keypoint_frame": keypoint,
             "sample_frame": sample_frame,
             "initial_frame": initial_frame,
-            "alt_target_positions": kf_alt_pos,
-            "alt_target_mask": kf_alt_msk,
         }
         final_obs = {
             "trans_action_indicies": trans_indicies,
@@ -757,17 +694,7 @@ def fill_replay_temporal(
     rank,
     clip_model=None,
     device="cpu",
-    multipeak_targets_json: str = "",
 ):
-
-    # Load precomputed multi-peak targets if provided
-    multipeak_targets = None
-    if multipeak_targets_json and os.path.exists(multipeak_targets_json):
-        import json as _json
-        with open(multipeak_targets_json) as _f:
-            multipeak_targets = _json.load(_f)
-        if rank == 0:
-            print(f"[Info] Loaded multi-peak targets: {multipeak_targets_json}")
 
     disk_exist = False
     if replay._disk_saving:
@@ -801,16 +728,6 @@ def fill_replay_temporal(
 
             # extract keypoints
             episode_keypoints = keypoint_discovery(demo)  # list of keypoint   [id0, id1, id2]
-
-            # Load alt targets for this episode
-            num_kf = len(episode_keypoints)
-            ep_alt_positions = None
-            ep_alt_mask = None
-            if multipeak_targets is not None and str(d_idx) in multipeak_targets:
-                mp = multipeak_targets[str(d_idx)]
-                ep_alt_positions = np.array(mp["alt_positions"], dtype=np.float32)[:num_kf]
-                ep_alt_mask = np.array(mp["alt_mask"], dtype=bool)[:num_kf]
-
             next_keypoint_idx = 0
             for i in range(len(demo) - 1):
                 if not demo_augmentation and i > 0:
@@ -846,8 +763,6 @@ def fill_replay_temporal(
                     description=desc,
                     clip_model=clip_model,
                     device=device,
-                    ep_alt_positions=ep_alt_positions,
-                    ep_alt_mask=ep_alt_mask,
                 )
 
         # save TERMINAL info in replay_info.npy

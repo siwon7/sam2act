@@ -258,7 +258,7 @@ def create_replay_temporal(
         ]
     )
 
-    multipeak_max_peaks = 5
+    multipeak_max_peaks = 3
 
     extra_replay_elements = [
         ReplayElement("demo", (), bool),
@@ -421,8 +421,8 @@ def _add_keypoints_to_replay(
             kf_alt_pos = ep_alt_positions[k]    # (max_peaks, 3)
             kf_alt_msk = ep_alt_mask[k]         # (max_peaks,)
         else:
-            kf_alt_pos = np.zeros((5, 3), dtype=np.float32)
-            kf_alt_msk = np.zeros((5,), dtype=np.bool_)
+            kf_alt_pos = np.zeros((3, 3), dtype=np.float32)
+            kf_alt_msk = np.zeros((3,), dtype=np.bool_)
 
         others = {
             "demo": True,
@@ -552,7 +552,6 @@ def fill_replay(
                 ], dtype=np.float32)
                 ep_alt_positions, ep_alt_mask = collect_alt_targets(
                     kf_poses, kf_opens, num_kf, max_peaks=3,
-                    spatial_only=True,  # v7: cluster by EE position only
                 )
 
             next_keypoint_idx = 0
@@ -686,8 +685,8 @@ def _add_keypoints_to_replay_temporal(
             kf_alt_pos = ep_alt_positions[k]
             kf_alt_msk = ep_alt_mask[k]
         else:
-            kf_alt_pos = np.zeros((5, 3), dtype=np.float32)
-            kf_alt_msk = np.zeros((5,), dtype=np.bool_)
+            kf_alt_pos = np.zeros((3, 3), dtype=np.float32)
+            kf_alt_msk = np.zeros((3,), dtype=np.bool_)
 
         others = {
             "demo": True,
