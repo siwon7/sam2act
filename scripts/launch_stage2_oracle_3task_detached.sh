@@ -21,12 +21,15 @@ for idx in "${!TASKS[@]}"; do
   task="${TASKS[$idx]}"
   gpu="${GPUS[$idx]}"
   log_file="${LOG_ROOT}/stage2_oracle_${task}_${EXP_SUFFIX}.log"
+  pid_file="${LOG_ROOT}/stage2_oracle_${task}_${EXP_SUFFIX}.pid"
   echo "[launch] ${task} on GPU ${gpu}; log=${log_file}"
-  nohup "${SCRIPT_DIR}/run_stage2_oracle_train.sh" \
+  setsid -f bash -c 'pid_file="$1"; shift; echo "$$" > "${pid_file}"; exec "$@"' _ "${pid_file}" \
+    "${SCRIPT_DIR}/run_stage2_oracle_train.sh" \
     --task "${task}" \
     --gpu "${gpu}" \
     --master-port "${PORTS[$idx]}" \
     --exp-suffix "${EXP_SUFFIX}" \
-    > "${log_file}" 2>&1 &
-  echo "[launch] pid=$!"
+    > "${log_file}" 2>&1
+  sleep 0.2
+  echo "[launch] pid=$(cat "${pid_file}")"
 done
