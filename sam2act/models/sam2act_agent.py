@@ -1068,10 +1068,20 @@ class SAM2Act_Agent:
             pc, img_feat, self.scene_bounds, no_op=not self.move_pc_in_bound
         )
 
+        oracle_stage1_wpt = observation.get("oracle_stage1_wpt", None)
+        if oracle_stage1_wpt is not None:
+            oracle_stage1_wpt = oracle_stage1_wpt.float().to(self._device)
+            if oracle_stage1_wpt.dim() == 1:
+                oracle_stage1_wpt = oracle_stage1_wpt.unsqueeze(0)
+            while oracle_stage1_wpt.dim() > 2:
+                oracle_stage1_wpt = oracle_stage1_wpt[:, -1]
+            oracle_stage1_wpt = oracle_stage1_wpt[:, :3]
+
         # TODO: Vectorize
         pc_new = []
         rev_trans = []
-        for _pc in pc:
+        oracle_stage1_wpt_local = []
+        for idx, _pc in enumerate(pc):
             a, b = mvt_utils.place_pc_in_cube(
                 _pc,
                 with_mean_or_bounds=self._place_with_mean,
@@ -1079,7 +1089,19 @@ class SAM2Act_Agent:
             )
             pc_new.append(a)
             rev_trans.append(b)
+            if oracle_stage1_wpt is not None:
+                oracle_local, _ = mvt_utils.place_pc_in_cube(
+                    _pc,
+                    oracle_stage1_wpt[idx].unsqueeze(0),
+                    with_mean_or_bounds=self._place_with_mean,
+                    scene_bounds=None if self._place_with_mean else self.scene_bounds,
+                )
+                oracle_stage1_wpt_local.append(oracle_local)
         pc = pc_new
+        if oracle_stage1_wpt is not None:
+            oracle_stage1_wpt_local = torch.cat(oracle_stage1_wpt_local, dim=0)
+        else:
+            oracle_stage1_wpt_local = None
 
         bs = len(pc)
         nc = self._net_mod.num_img
@@ -1092,6 +1114,7 @@ class SAM2Act_Agent:
             proprio=proprio,
             lang_emb=lang_goal_embs,
             img_aug=0,  # no img augmentation while acting
+            wpt_local=oracle_stage1_wpt_local,
         )
         _, rot_q, grip_q, collision_q, y_q, _ = self.get_q(
             out, dims=(bs, nc, h, w), only_pred=True, get_q_trans=False
@@ -1127,7 +1150,10 @@ class SAM2Act_Agent:
                 z_distri.cpu().numpy(),
             )
         else:
-            return ActResult(continuous_action)
+            info = {}
+            if oracle_stage1_wpt is not None:
+                info["oracle_stage1_wpt"] = oracle_stage1_wpt[0].detach().cpu().numpy()
+            return ActResult(continuous_action, info=info)
 
     def get_pred(
         self,

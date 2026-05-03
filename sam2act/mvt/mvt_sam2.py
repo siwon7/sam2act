@@ -558,11 +558,41 @@ class MVT_SAM2(nn.Module):
                         )
 
                 else:
-                    # bs, 3
-                    wpt_local = self.get_wpt(
-                        out, y_q=None, mvt1_or_mvt2=True,
-                        dyn_cam_info=None,
-                    )
+                    # bs, 3. During oracle-stage1 rollout, wpt_local is the
+                    # demo keypoint translated into the stage1 cube frame.
+                    if wpt_local_stage_one is not None:
+                        pred_wpt_local = self.get_wpt(
+                            out, y_q=None, mvt1_or_mvt2=True,
+                            dyn_cam_info=None,
+                        )
+                        wpt_local = wpt_local_stage_one.clone().detach()
+                        wpt_img = self.get_pt_loc_on_img(
+                            wpt_local.unsqueeze(1),
+                            mvt1_or_mvt2=True,
+                            dyn_cam_info=None,
+                            out=None,
+                        ).squeeze(1)
+                        wpt_img = torch.clamp(wpt_img.reshape(-1, 2), 0, self.img_size - 1)
+                        hm = mvt_utils.generate_hm_from_pt(
+                            wpt_img,
+                            (self.img_size, self.img_size),
+                            sigma=-1,
+                        )
+                        out["stage1_pred_wpt_local"] = pred_wpt_local.detach()
+                        out["stage1_oracle_wpt_local"] = wpt_local.detach()
+                        out["stage1_pred_trans"] = out["trans"]
+                        out["trans"] = torch.log(hm.clamp_min(1e-6)).view(
+                            wpt_local.shape[0],
+                            self.mvt1.num_img,
+                            1,
+                            self.img_size,
+                            self.img_size,
+                        ).to(dtype=out["trans"].dtype, device=out["trans"].device)
+                    else:
+                        wpt_local = self.get_wpt(
+                            out, y_q=None, mvt1_or_mvt2=True,
+                            dyn_cam_info=None,
+                        )
                     pc, rev_trans = mvt_utils.trans_pc(
                         pc, loc=wpt_local, sca=self.st_sca
                     )

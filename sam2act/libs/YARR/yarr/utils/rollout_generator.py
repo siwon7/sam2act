@@ -21,12 +21,13 @@ class RolloutGenerator(object):
                   episode_length: int, timesteps: int,
                   eval: bool, eval_demo_seed: int = 0,
                   record_enabled: bool = False,
-                  replay_ground_truth: bool = False):            
+                  replay_ground_truth: bool = False,
+                  oracle_stage1: bool = False):            
         
         if eval:
             obs = env.reset_to_demo(eval_demo_seed)
             # get ground-truth action sequence
-            if replay_ground_truth:
+            if replay_ground_truth or oracle_stage1:
                 actions = env.get_ground_truth_action(eval_demo_seed)
         else:
             obs = env.reset()
@@ -35,6 +36,13 @@ class RolloutGenerator(object):
         for step in range(episode_length):
 
             prepped_data = {k:torch.tensor(np.array([v]), device=self._env_device) for k, v in obs_history.items()}
+            if oracle_stage1 and not replay_ground_truth:
+                if step >= len(actions):
+                    return
+                prepped_data["oracle_stage1_wpt"] = torch.tensor(
+                    np.array([actions[step][:3]], dtype=np.float32),
+                    device=self._env_device,
+                )
             if not replay_ground_truth:
                 act_result = agent.act(step_signal.value, prepped_data,
                                     deterministic=eval)

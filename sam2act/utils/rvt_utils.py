@@ -272,6 +272,12 @@ def get_eval_parser():
     )
     parser.add_argument("--headless", action="store_true", default=False)
     parser.add_argument("--ground-truth", action="store_true", default=False)
+    parser.add_argument(
+        "--oracle-stage1",
+        action="store_true",
+        default=False,
+        help="Force the stage1 heatmap/crop to the demo keypoint while still using the policy's stage2 prediction.",
+    )
     parser.add_argument("--exp_cfg_path", type=str, default=None)
     parser.add_argument("--mvt_cfg_path", type=str, default=None)
     parser.add_argument(

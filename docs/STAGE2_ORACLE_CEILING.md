@@ -83,10 +83,27 @@ Stage2 checkpoints go under:
 
 For the first ceiling run, forced heatmap code is not required because non-memory stage2 training already uses the GT crop center and a single GT heatmap.
 
+For rollout ceiling, this branch adds `eval.py --oracle-stage1`. RLBench eval resets to a demo, reads the demo keypoint action for the current policy step, injects the keypoint translation as `oracle_stage1_wpt`, and forces the stage1 heatmap/crop to that location. The final action is still predicted by stage2.
+
+Smoke run:
+
+```bash
+bash scripts/run_stage2_oracle_eval.sh \
+  --task put_block_back \
+  --gpu 7 \
+  --model-folder /hdd3/siwon_ckpt/sam2act/runs/sam2act_stage2_oracle_put_block_back_dirty_stage1_smoke \
+  --model-name model_plus_last.pth \
+  --eval-datafolder /hdd3/siwon_data/sam2act/data_memory/test \
+  --eval-episodes 1 \
+  --episode-length 12 \
+  --log-name oracle_stage1_smoke
+```
+
+The eval launcher uses `xvfb-run` by default because CoppeliaSim vision sensors need an X-backed GL context on this machine.
+
 The useful next variants are:
 
 - Offline oracle eval: run `mvt2` with the GT crop center instead of `mvt1` top1, then measure the local heatmap error.
-- Forced stage1 heatmap: override the stage1 output heatmap with a Gaussian at the GT waypoint before `get_wpt(...)`, then let the existing stage2 code run unchanged.
 - Memory oracle: if `use_memory=True`, write memory from GT heatmaps only. This checks whether correct memory can remove the ceiling caused by wrong stage1 heatmaps being written into memory.
 
 The important distinction is training versus rollout. Training can be oracle now. Standard rollout eval still crops stage2 around stage1 top1, so a dirty stage1 wrong-collapse can remain a rollout ceiling unless eval is also oracle-forced.

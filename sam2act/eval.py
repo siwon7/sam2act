@@ -246,6 +246,7 @@ def eval(
     log_dir=None,
     verbose=True,
     save_video=False,
+    oracle_stage1=False,
 ):
     agent.eval()
     # if isinstance(agent, sam2e_agent.SAM2E_Agent):
@@ -348,6 +349,7 @@ def eval(
                 eval_demo_seed=ep,
                 record_enabled=save_video,
                 replay_ground_truth=replay_ground_truth,
+                oracle_stage1=oracle_stage1,
             )
             try:
                 for replay_transition in generator:
@@ -570,6 +572,7 @@ def _eval(args):
             eval_episodes=args.eval_episodes,
             episode_length=args.episode_length,
             replay_ground_truth=args.ground_truth,
+            oracle_stage1=args.oracle_stage1,
             device=args.device,
             headless=args.headless,
             logging=True,
