@@ -77,48 +77,58 @@ Practical read:
 Run the same probe against the latest numeric checkpoint from the active
 stage1 v7 training, not `model_last.pth`.
 
-Target:
+Targets:
 
 - `runs/sam2act_stage1_v7_spatial_only_3task/model_33.pth`
+- `runs/sam2act_stage1_v7_spatial_only_3task/model_34.pth`
 
 Outputs:
 
 - `logs/stage1_collapse_probe_stage1_v7_model_33_gpu7_20260504_073352.md`
 - `logs/stage1_collapse_probe_stage1_v7_model_33_gpu7_20260504_073352.csv`
 - `logs/stage1_collapse_probe_stage1_v7_model_33_gpu7_20260504_073352_per_episode.csv`
+- `logs/stage1_collapse_probe_stage1_v7_model_34_gpu7_20260504_073821.md`
+- `logs/stage1_collapse_probe_stage1_v7_model_34_gpu7_20260504_073821.csv`
+- `logs/stage1_collapse_probe_stage1_v7_model_34_gpu7_20260504_073821_per_episode.csv`
 
 ## Latest Numeric Checkpoint Result
 
-The latest numeric checkpoint does not simply fix the dirty behavior. Some
-dirty failures persist, some improve, and reopen_drawer exposes additional
-wrong-direction rows.
+`model_33.pth` was the latest numeric checkpoint when the first comparison
+started. `model_34.pth` appeared while the probe was running, so GPU7 was run
+again on `model_34.pth`. The latest numeric checkpoint does not simply fix the
+dirty behavior. Some dirty failures persist, some improve, and reopen_drawer
+exposes additional wrong-direction rows.
 
-| task | KF | dirty verdict | model_33 verdict | read |
+| task | KF | dirty verdict | model_34 verdict | read |
 |---|---:|---|---|---|
 | put_block_back | 4 | wrong-collapse-mp, alt 10/10 | wrong-collapse-mp, alt 10/10 | persistent alt-collapse |
-| put_block_back | 6 | wrong-collapse-single | wrong-collapse-single | persistent far-crop, now GT direction in all episodes |
-| put_block_back | 9 | wrong-collapse-mp, alt 10/10 | wrong-collapse-mp, alt 10/10 | persistent alt-collapse |
-| rearrange_block | 0 | wrong-collapse-single | wrong-collapse-single | persistent far-crop/off issue |
-| rearrange_block | 8 | wrong-collapse-single | wrong-collapse-single | persistent GT suppression/off issue, slightly less collapsed |
-| reopen_drawer | 0 | wrong-collapse-mp/off | wrong/noncollapsed, alt-favored 9/10 | persistent wrong target, no longer collapsed |
-| reopen_drawer | 5 | wrong-collapse-single | mixed | improved from all wrong to 6/10 correct |
-| reopen_drawer | 6 | mixed | mixed | improved from 4/10 correct to 8/10 correct |
-| reopen_drawer | 8 | wrong-collapse-mp | mixed | mostly fixed, 9/10 correct |
-| reopen_drawer | 3 | ok-collapse | wrong | new issue in model_33: top1 alt 10/10 despite GT score |
-| reopen_drawer | 4 | ok-collapse | wrong-collapse-mp | new issue in model_33: alt-favored/faint collapse |
+| put_block_back | 6 | wrong-collapse-single | wrong, GT direction/far crop 10/10 | persistent far-crop, collapse ratio improved |
+| put_block_back | 9 | wrong-collapse-mp, alt 10/10 | wrong, alt 10/10 | persistent alt preference, collapse ratio improved |
+| rearrange_block | 0 | wrong-collapse-single | ok | fixed in model_34 |
+| rearrange_block | 8 | wrong-collapse-single | mixed | improved but still 7/10 wrong |
+| reopen_drawer | 0 | wrong-collapse-mp/off | wrong, alt-favored 10/10 | persistent wrong target, no longer collapsed |
+| reopen_drawer | 5 | wrong-collapse-single | ok | fixed in model_34 |
+| reopen_drawer | 6 | mixed | mixed | similar, 5/10 correct |
+| reopen_drawer | 8 | wrong-collapse-mp | mixed | no longer collapsed, still 9/10 wrong |
+| reopen_drawer | 2 | ok-collapse | wrong | new/latest issue: off/tie against ambiguous targets |
+| reopen_drawer | 3 | ok-collapse | mixed | new/latest issue: 6/10 wrong despite strong GT score |
+| reopen_drawer | 4 | ok-collapse | wrong | new/latest issue: alt/tie/far behavior |
 
-Problem rows from `model_33`:
+Problem rows from latest numeric `model_34`:
 
 | task | KF | MP | peak | top1 correct/wrong | score gt/alt/tie | GT/p1 | alt/GT | cause |
 |---|---:|:---:|:---:|:---:|:---:|---:|---:|---|
-| put_block_back | 4 | 10/10 | collapsed | 0/10 | 0/10/0 | 0.000-0.000-0.000 | inf-inf-inf | heatmap_favors_alt_candidate:10 |
-| put_block_back | 6 | 0/10 | collapsed | 0/10 | 0/0/0 | 0.037-0.334-0.438 | - | gt_direction_but_far_crop:10 |
-| put_block_back | 9 | 10/10 | collapsed | 0/10 | 0/10/0 | 0.000-0.002-0.009 | 112.000-805.568-9628.800 | heatmap_favors_alt_candidate:10 |
-| rearrange_block | 0 | 0/10 | collapsed | 0/10 | 0/0/0 | 0.321-0.334-0.336 | - | gt_direction_but_far_crop:6,single_step_direction_wrong:4 |
-| rearrange_block | 8 | 0/10 | weak | 0/10 | 0/0/0 | 0.000-0.071-0.157 | - | gt_score_suppressed:7,single_step_direction_wrong:3 |
-| reopen_drawer | 0 | 10/10 | alive | 0/10 | 0/10/0 | 0.000-0.000-0.000 | 7881.497-23250.528-91054.545 | heatmap_favors_alt_candidate:9 |
-| reopen_drawer | 3 | 10/10 | alive | 0/10 | 10/0/0 | 0.864-0.911-0.919 | 0.359-0.368-0.376 | top1_wrong_despite_gt_score:10 |
-| reopen_drawer | 4 | 10/10 | faint | 0/10 | 3/6/1 | 0.009-0.096-0.335 | 0.082-3.395-40.515 | heatmap_favors_alt_candidate:6,top1_wrong_despite_gt_score:3 |
+| put_block_back | 2 | 10/10 | alive | 0/10 | 5/4/1 | 0.231-0.329-0.831 | 0.292-0.843-2.552 | heatmap_favors_alt_candidate:4,top1_wrong_despite_gt_score:3 |
+| put_block_back | 4 | 10/10 | collapsed | 0/10 | 0/10/0 | 0.000-0.000-0.000 | 126073.905-1316096.000-inf | heatmap_favors_alt_candidate:10 |
+| put_block_back | 6 | 0/10 | weak | 0/10 | 0/0/0 | 0.158-0.326-0.358 | - | gt_direction_but_far_crop:10 |
+| put_block_back | 9 | 10/10 | weak | 0/10 | 0/10/0 | 0.023-0.056-0.134 | 8.187-19.898-50.424 | heatmap_favors_alt_candidate:10 |
+| rearrange_block | 5 | 0/10 | weak | 3/7 | 0/0/0 | 0.236-0.471-0.994 | - | gt_direction_but_far_crop:7 |
+| rearrange_block | 8 | 0/10 | alive | 3/7 | 0/0/0 | 0.238-0.451-0.709 | - | gt_direction_but_far_crop:5,single_step_direction_wrong:2 |
+| reopen_drawer | 0 | 10/10 | alive | 0/10 | 0/10/0 | 0.000-0.000-0.000 | 7189.445-16952.389-58165.895 | heatmap_favors_alt_candidate:10 |
+| reopen_drawer | 2 | 10/10 | alive | 0/10 | 0/0/10 | 0.956-0.990-1.000 | 0.975-0.987-0.990 | gt_alt_scores_tied_but_top1_wrong:10 |
+| reopen_drawer | 3 | 10/10 | alive | 4/6 | 10/0/0 | 0.874-0.914-0.926 | 0.370-0.377-0.385 | top1_wrong_despite_gt_score:6 |
+| reopen_drawer | 4 | 10/10 | weak | 0/10 | 4/4/2 | 0.118-0.283-0.386 | 0.156-1.021-2.475 | heatmap_favors_alt_candidate:4,top1_wrong_despite_gt_score:4 |
+| reopen_drawer | 8 | 10/10 | weak | 1/9 | 0/4/6 | 0.324-0.345-0.473 | 0.842-1.103-1.467 | gt_alt_scores_tied_but_top1_wrong:5,heatmap_favors_alt_candidate:4 |
 
 ## Conclusion
 
@@ -140,10 +150,10 @@ Comparison rule:
   as a stage1 objective/data semantics issue rather than a single checkpoint
   issue.
 
-Observed outcome:
+Observed outcome for latest numeric `model_34`:
 
 - put_block_back KF4/KF9 persisted, so this is not just dirty checkpoint noise.
-- rearrange_block KF0/KF8 persisted, so inspect target/crop semantics.
-- reopen_drawer KF8 improved, so that row was at least partly checkpoint
-  dependent.
-- reopen_drawer KF0/KF3/KF4 still need a vision/target semantics check.
+- put_block_back KF6 persisted as GT-direction-but-far crop.
+- rearrange_block KF0 is fixed, while KF5/KF8 still show far-crop behavior.
+- reopen_drawer KF0 persists and KF2/KF3/KF4/KF8 need a vision/target
+  semantics check.
