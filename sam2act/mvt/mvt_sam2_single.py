@@ -130,6 +130,17 @@ class MVT_SAM2_Single(nn.Module):
         graph_contrastive_loss_weight=0.05,
         graph_contrastive_temperature=0.1,
         graph_contrastive_pos_radius=0.03,
+        graph_peak_insert_gt_train=True,
+        graph_peak_positive_radius=0.05,
+        graph_peak_nms_dist=0.05,
+        stage2_candidate_mode="top1",
+        stage2_candidate_train_crop="gt",
+        stage2_kcrop_train_pick="target",
+        stage2_candidate_insert_gt_train=True,
+        stage2_memory_write_mode="stage1",
+        stage2_memory_write_topk=3,
+        stage2_memory_write_temperature=0.25,
+        stage2_memory_write_sigma=1.5,
         renderer_device="cuda:0",
         renderer=None,
         no_feat=False,
@@ -241,6 +252,10 @@ class MVT_SAM2_Single(nn.Module):
         self.edge_bias_revisit_sigma = float(edge_bias_revisit_sigma)
         self.edge_bias_ref_match_threshold = float(edge_bias_ref_match_threshold)
         self.edge_bias_transition_hop = int(edge_bias_transition_hop)
+        self.stage2_memory_write_mode = str(stage2_memory_write_mode).lower()
+        self.stage2_memory_write_topk = int(stage2_memory_write_topk)
+        self.stage2_memory_write_temperature = float(stage2_memory_write_temperature)
+        self.stage2_memory_write_sigma = float(stage2_memory_write_sigma)
 
         self._edge_bias_wpt_by_obs_idx = {}
         self._edge_bias_last_pred_wpt: Optional[torch.Tensor] = None
@@ -786,6 +801,42 @@ class MVT_SAM2_Single(nn.Module):
 
             memory_bank_list[self.curr_obs_idx] = [memory, memory_pos]
 
+    def _format_memory_write_heatmap(self, trans, bs, num_img, h, w):
+        mode = self.stage2_memory_write_mode
+        if mode in ("stage1", "raw", "none"):
+            return trans.view(bs, num_img, 1, 1, h, w)
+        if mode not in ("topk_soft", "weighted_topk", "selected"):
+            raise ValueError(
+                "stage2_memory_write_mode must be one of "
+                "stage1, topk_soft, weighted_topk, selected; "
+                f"got {mode}"
+            )
+
+        flat = trans.float().view(bs, num_img, 1, h * w)
+        k = 1 if mode == "selected" else max(1, min(self.stage2_memory_write_topk, h * w))
+        vals, idx = torch.topk(flat, k=k, dim=-1)
+        if mode == "selected":
+            weights = torch.ones_like(vals)
+        else:
+            temp = max(self.stage2_memory_write_temperature, 1e-6)
+            weights = torch.softmax(vals / temp, dim=-1)
+
+        sigma = float(self.stage2_memory_write_sigma)
+        if sigma <= 0:
+            sparse = torch.zeros_like(flat)
+            sparse.scatter_(-1, idx, weights)
+            return sparse.view(bs, num_img, 1, 1, h, w).to(dtype=trans.dtype)
+
+        ys = (idx // w).to(dtype=trans.dtype).view(bs, num_img, 1, k, 1, 1)
+        xs = (idx % w).to(dtype=trans.dtype).view(bs, num_img, 1, k, 1, 1)
+        grid_y = torch.arange(h, device=trans.device, dtype=trans.dtype).view(1, 1, 1, 1, h, 1)
+        grid_x = torch.arange(w, device=trans.device, dtype=trans.dtype).view(1, 1, 1, 1, 1, w)
+        dist2 = (grid_y - ys).pow(2) + (grid_x - xs).pow(2)
+        hm = torch.exp(-dist2 / (2 * sigma * sigma))
+        hm = hm * weights.to(dtype=trans.dtype).view(bs, num_img, 1, k, 1, 1)
+        hm = hm.sum(dim=3).clamp_max(1.0)
+        return hm.unsqueeze(3).to(dtype=trans.dtype)
+
     def forward(
         self,
         img,
@@ -1065,7 +1116,10 @@ class MVT_SAM2_Single(nn.Module):
                                     written_obs_idx=self.curr_obs_idx,
                                     pred_wpt=pred_wpt,
                                 )
-                            self.sam2_add_new_memory(self.sam2, trans.view(bs, num_img, 1, 1, h, w), idx, num_img, feat_sizes)
+                            memory_hm = self._format_memory_write_heatmap(
+                                trans, bs, num_img, h, w
+                            )
+                            self.sam2_add_new_memory(self.sam2, memory_hm, idx, num_img, feat_sizes)
                             self.curr_obs_idx += 1
 
                 x = torch.cat(x_, dim=0)
@@ -1117,7 +1171,10 @@ class MVT_SAM2_Single(nn.Module):
                                 written_obs_idx=self.curr_obs_idx,
                                 pred_wpt=pred_wpt,
                             )
-                        self.sam2_add_new_memory(self.sam2, trans.view(bs, num_img, 1, 1, h, w), 0, num_img, feat_sizes)
+                        memory_hm = self._format_memory_write_heatmap(
+                            trans, bs, num_img, h, w
+                        )
+                        self.sam2_add_new_memory(self.sam2, memory_hm, 0, num_img, feat_sizes)
                     self.curr_obs_idx += 1
                 
         if not self.no_feat:

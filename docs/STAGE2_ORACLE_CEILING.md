@@ -26,8 +26,8 @@ This isolates whether stage2 can learn the correct local refinement when stage1 
 The run script symlinks the dirty stage1 checkpoint into the new stage2 run dir:
 
 ```bash
-/hdd3/siwon_ckpt/sam2act/runs/sam2act_stage2_oracle_<task>_dirty_stage1/model_last.pth \
-  -> /hdd3/siwon_ckpt/sam2act/runs/sam2act_memorybench_<task>/model_last.pth
+/hdd4/siwon/checkpoints/sam2act/runs/sam2act_stage2_oracle_<task>_dirty_stage1/model_last.pth \
+  -> /hdd4/siwon/checkpoints/sam2act/runs/sam2act_memorybench_<task>/model_last.pth
 ```
 
 That means the dirty stage1 model can seed oracle stage2 training immediately.
@@ -76,7 +76,7 @@ Logs for detached jobs go under:
 Stage2 checkpoints go under:
 
 ```bash
-/hdd3/siwon_ckpt/sam2act/runs/sam2act_stage2_oracle_<task>_dirty_stage1[_suffix]/
+/hdd4/siwon/checkpoints/sam2act/runs/sam2act_stage2_oracle_<task>_dirty_stage1[_suffix]/
 ```
 
 ## Forced Heatmap Variants
@@ -91,9 +91,9 @@ Smoke run:
 bash scripts/run_stage2_oracle_eval.sh \
   --task put_block_back \
   --gpu 7 \
-  --model-folder /hdd3/siwon_ckpt/sam2act/runs/sam2act_stage2_oracle_put_block_back_dirty_stage1_smoke \
+  --model-folder /hdd4/siwon/checkpoints/sam2act/runs/sam2act_stage2_oracle_put_block_back_dirty_stage1_smoke \
   --model-name model_plus_last.pth \
-  --eval-datafolder /hdd3/siwon_data/sam2act/data_memory/test \
+  --eval-datafolder /hdd4/siwon/datasets/sam2act/data_memory/test \
   --eval-episodes 1 \
   --episode-length 12 \
   --log-name oracle_stage1_smoke

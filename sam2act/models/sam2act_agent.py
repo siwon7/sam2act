@@ -925,8 +925,51 @@ class SAM2Act_Agent:
 
                     total_loss = trans_loss
 
-                # Graph peak selector losses (Stage2)
+                # V9 top-K peak selector loss. During v9a training the model
+                # inserts the GT crop as one candidate, so this is a selector
+                # ceiling test rather than a Stage1 coverage test.
                 graph_loss_log = {}
+                if (
+                    self.use_graph_peak_select
+                    and "graph_peak_logits" in out
+                    and "graph_peak_target_idx" in out
+                ):
+                    from sam2act.mvt.graph_peak_selector import peak_selection_loss
+
+                    logits = out["graph_peak_logits"]
+                    target_idx = out["graph_peak_target_idx"]
+                    valid = out.get("graph_peak_covered", None)
+                    p_loss = peak_selection_loss(logits, target_idx, valid)
+                    total_loss = total_loss + self.graph_peak_select_loss_weight * p_loss
+
+                    with torch.no_grad():
+                        if valid is None:
+                            valid = torch.ones_like(target_idx, dtype=torch.bool)
+                        pred_idx = logits.argmax(dim=-1)
+                        valid_count = valid.float().sum().clamp_min(1.0)
+                        acc = ((pred_idx == target_idx) & valid).float().sum() / valid_count
+                        covered = valid.float().mean()
+                        target_dist = out.get("graph_peak_target_dist", None)
+                        if target_dist is not None and valid.any():
+                            target_dist_mean = target_dist[valid].float().mean()
+                        else:
+                            target_dist_mean = torch.tensor(0.0, device=logits.device)
+                        pred_topk_covered = out.get("graph_peak_pred_topk_covered", None)
+                        if pred_topk_covered is not None:
+                            pred_topk_coverage = pred_topk_covered.float().mean()
+                        else:
+                            pred_topk_coverage = covered
+
+                    graph_loss_log.update(
+                        {
+                            "graph_peak_select_loss": p_loss.item(),
+                            "graph_peak_select_acc": acc.item(),
+                            "graph_peak_coverage": covered.item(),
+                            "graph_peak_pred_topk_coverage": pred_topk_coverage.item(),
+                            "graph_peak_target_dist": target_dist_mean.item(),
+                        }
+                    )
+
                 if self.use_graph_peak_select and "graph_outputs" in out:
                     from sam2act.mvt.graph_peak_selector import (
                         node_contrastive_loss,

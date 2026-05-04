@@ -12,9 +12,9 @@ OUT_DIR="${OUT_DIR:-${REPO_ROOT}/logs}"
 STAMP="${STAMP:-$(date +%Y%m%d_%H%M%S)}"
 
 declare -A MODELS=(
-  [put_block_back]="/hdd3/siwon_ckpt/sam2act/runs/sam2act_memorybench_put_block_back/model_last.pth"
-  [rearrange_block]="/hdd3/siwon_ckpt/sam2act/runs/sam2act_memorybench_rearrange_block/model_last.pth"
-  [reopen_drawer]="/hdd3/siwon_ckpt/sam2act/runs/sam2act_memorybench_reopen_drawer/model_last.pth"
+  [put_block_back]="/hdd4/siwon/checkpoints/sam2act/runs/sam2act_memorybench_put_block_back/model_last.pth"
+  [rearrange_block]="/hdd4/siwon/checkpoints/sam2act/runs/sam2act_memorybench_rearrange_block/model_last.pth"
+  [reopen_drawer]="/hdd4/siwon/checkpoints/sam2act/runs/sam2act_memorybench_reopen_drawer/model_last.pth"
 )
 
 IFS=',' read -r -a TASK_ARRAY <<< "${TASKS}"

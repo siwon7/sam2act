@@ -9,9 +9,9 @@ TASK=""
 GPU="${GPU:-4}"
 NPROC="${NPROC:-1}"
 MASTER_PORT="${MASTER_PORT:-$((29700 + RANDOM % 200))}"
-RUNS_ROOT="${RUNS_ROOT:-/hdd3/siwon_ckpt/sam2act/runs}"
-DATA_ROOT="${DATA_ROOT:-/hdd3/siwon_data/sam2act}"
-SAM2_CKPT="${SAM2_CKPT:-/hdd3/siwon_assets/sam2act_backbone/checkpoints/sam2.1_hiera_base_plus.pt}"
+RUNS_ROOT="${RUNS_ROOT:-/hdd4/siwon/checkpoints/sam2act/runs}"
+DATA_ROOT="${DATA_ROOT:-/hdd4/siwon/datasets/sam2act}"
+SAM2_CKPT="${SAM2_CKPT:-/hdd4/siwon/assets/sam2act_backbone/checkpoints/sam2.1_hiera_base_plus.pt}"
 EXP_NAME=""
 EXP_SUFFIX=""
 STAGE1_RUN_DIR=""
@@ -25,6 +25,20 @@ LR="${LR:-1.25e-06}"
 NUM_MASKMEM="${NUM_MASKMEM:-9}"
 USE_MEMORY="${USE_MEMORY:-False}"
 USE_MULTIPEAK="${USE_MULTIPEAK:-False}"
+USE_GRAPH_PEAK_SELECT="${USE_GRAPH_PEAK_SELECT:-False}"
+GRAPH_PEAK_TOPK="${GRAPH_PEAK_TOPK:-3}"
+GRAPH_PEAK_SELECT_LOSS_WEIGHT="${GRAPH_PEAK_SELECT_LOSS_WEIGHT:-1.0}"
+GRAPH_PEAK_INSERT_GT_TRAIN="${GRAPH_PEAK_INSERT_GT_TRAIN:-True}"
+GRAPH_PEAK_POSITIVE_RADIUS="${GRAPH_PEAK_POSITIVE_RADIUS:-0.05}"
+GRAPH_PEAK_NMS_DIST="${GRAPH_PEAK_NMS_DIST:-0.05}"
+STAGE2_CANDIDATE_MODE="${STAGE2_CANDIDATE_MODE:-top1}"
+STAGE2_CANDIDATE_TRAIN_CROP="${STAGE2_CANDIDATE_TRAIN_CROP:-gt}"
+STAGE2_KCROP_TRAIN_PICK="${STAGE2_KCROP_TRAIN_PICK:-target}"
+STAGE2_CANDIDATE_INSERT_GT_TRAIN="${STAGE2_CANDIDATE_INSERT_GT_TRAIN:-True}"
+STAGE2_MEMORY_WRITE_MODE="${STAGE2_MEMORY_WRITE_MODE:-stage1}"
+STAGE2_MEMORY_WRITE_TOPK="${STAGE2_MEMORY_WRITE_TOPK:-3}"
+STAGE2_MEMORY_WRITE_TEMPERATURE="${STAGE2_MEMORY_WRITE_TEMPERATURE:-0.25}"
+STAGE2_MEMORY_WRITE_SIGMA="${STAGE2_MEMORY_WRITE_SIGMA:-1.5}"
 SAMPLE_MODE="${SAMPLE_MODE:-demo_uniform_temporal}"
 FRESH_START=1
 PREPARE_ONLY=0
@@ -42,9 +56,9 @@ Options:
   --gpu IDS              CUDA_VISIBLE_DEVICES value. Default: 4
   --nproc N             torchrun processes. Default: 1
   --master-port PORT     torchrun rendezvous port. Default: random 29700-29899
-  --runs-root DIR        Checkpoint root. Default: /hdd3/siwon_ckpt/sam2act/runs
-  --data-root DIR        Replay/data root. Default: /hdd3/siwon_data/sam2act
-  --sam2-ckpt FILE       SAM2 backbone checkpoint. Default: /hdd3/siwon_assets/sam2act_backbone/checkpoints/sam2.1_hiera_base_plus.pt
+  --runs-root DIR        Checkpoint root. Default: /hdd4/siwon/checkpoints/sam2act/runs
+  --data-root DIR        Replay/data root. Default: /hdd4/siwon/datasets/sam2act
+  --sam2-ckpt FILE       SAM2 backbone checkpoint. Default: /hdd4/siwon/assets/sam2act_backbone/checkpoints/sam2.1_hiera_base_plus.pt
   --stage1-run-dir DIR   Source dirty stage1 run dir. Default is task-specific memorybench run.
   --stage1-ckpt FILE     Source stage1 checkpoint. Default: STAGE1_RUN_DIR/model_last.pth
   --exp-name NAME        Stage2 run exp_name. Default: stage2_oracle_TASK_dirty_stage1
@@ -58,6 +72,30 @@ Options:
   --sample-mode MODE     Replay sampling mode. Default: demo_uniform_temporal
   --use-memory           Train memory stage2 path instead of non-memory oracle crop.
   --use-multipeak        Keep stage1 multipeak labels enabled. Default is off.
+  --use-graph-peak-select
+                         Enable V9 top-K selector aux loss and selector crop at eval.
+  --graph-peak-topk N     Top-K Stage1 3D candidates. Default: 3
+  --graph-peak-select-loss-weight FLOAT
+                         Selector CE weight. Default: 1.0
+  --no-graph-peak-insert-gt
+                         Do not insert GT into top-K during training.
+  --v10a                  Enable V10a selector crop mode.
+  --v10b                  Enable V10b K-crop Stage2 branch mode.
+  --stage2-candidate-mode MODE
+                         top1 | selector | kcrop. Default: top1
+  --stage2-candidate-train-crop MODE
+                         gt | selector | nearest_gt. Default: gt
+  --stage2-kcrop-train-pick MODE
+                         target | selector. Default: target
+  --no-stage2-candidate-insert-gt
+                         Do not insert GT into Stage2 candidate packet during training.
+  --v10c-memory MODE      Memory write mode: stage1 | topk_soft | selected.
+  --stage2-memory-write-topk N
+                         V10c top-K per-view memory write count. Default: 3
+  --stage2-memory-write-temperature FLOAT
+                         V10c soft top-K temperature. Default: 0.25
+  --stage2-memory-write-sigma FLOAT
+                         V10c gaussian sigma in image pixels. Use 0 for sparse.
   --resume-plus          Resume model_plus_last.pth if it exists.
   --prepare-only         Create links/config handoff, then exit.
   --dry-run              Print command after preparation, then exit.
@@ -106,6 +144,29 @@ while [[ $# -gt 0 ]]; do
     --num-maskmem=*) NUM_MASKMEM="${1#*=}"; shift ;;
     --use-memory) USE_MEMORY=True; shift ;;
     --use-multipeak) USE_MULTIPEAK=True; shift ;;
+    --use-graph-peak-select) USE_GRAPH_PEAK_SELECT=True; shift ;;
+    --graph-peak-topk) GRAPH_PEAK_TOPK="${2:?missing --graph-peak-topk value}"; shift 2 ;;
+    --graph-peak-topk=*) GRAPH_PEAK_TOPK="${1#*=}"; shift ;;
+    --graph-peak-select-loss-weight) GRAPH_PEAK_SELECT_LOSS_WEIGHT="${2:?missing --graph-peak-select-loss-weight value}"; shift 2 ;;
+    --graph-peak-select-loss-weight=*) GRAPH_PEAK_SELECT_LOSS_WEIGHT="${1#*=}"; shift ;;
+    --no-graph-peak-insert-gt) GRAPH_PEAK_INSERT_GT_TRAIN=False; STAGE2_CANDIDATE_INSERT_GT_TRAIN=False; shift ;;
+    --v10a) STAGE2_CANDIDATE_MODE=selector; USE_GRAPH_PEAK_SELECT=True; shift ;;
+    --v10b) STAGE2_CANDIDATE_MODE=kcrop; USE_GRAPH_PEAK_SELECT=True; shift ;;
+    --stage2-candidate-mode) STAGE2_CANDIDATE_MODE="${2:?missing --stage2-candidate-mode value}"; shift 2 ;;
+    --stage2-candidate-mode=*) STAGE2_CANDIDATE_MODE="${1#*=}"; shift ;;
+    --stage2-candidate-train-crop) STAGE2_CANDIDATE_TRAIN_CROP="${2:?missing --stage2-candidate-train-crop value}"; shift 2 ;;
+    --stage2-candidate-train-crop=*) STAGE2_CANDIDATE_TRAIN_CROP="${1#*=}"; shift ;;
+    --stage2-kcrop-train-pick) STAGE2_KCROP_TRAIN_PICK="${2:?missing --stage2-kcrop-train-pick value}"; shift 2 ;;
+    --stage2-kcrop-train-pick=*) STAGE2_KCROP_TRAIN_PICK="${1#*=}"; shift ;;
+    --no-stage2-candidate-insert-gt) STAGE2_CANDIDATE_INSERT_GT_TRAIN=False; shift ;;
+    --v10c-memory) STAGE2_MEMORY_WRITE_MODE="${2:?missing --v10c-memory value}"; shift 2 ;;
+    --v10c-memory=*) STAGE2_MEMORY_WRITE_MODE="${1#*=}"; shift ;;
+    --stage2-memory-write-topk) STAGE2_MEMORY_WRITE_TOPK="${2:?missing --stage2-memory-write-topk value}"; shift 2 ;;
+    --stage2-memory-write-topk=*) STAGE2_MEMORY_WRITE_TOPK="${1#*=}"; shift ;;
+    --stage2-memory-write-temperature) STAGE2_MEMORY_WRITE_TEMPERATURE="${2:?missing --stage2-memory-write-temperature value}"; shift 2 ;;
+    --stage2-memory-write-temperature=*) STAGE2_MEMORY_WRITE_TEMPERATURE="${1#*=}"; shift ;;
+    --stage2-memory-write-sigma) STAGE2_MEMORY_WRITE_SIGMA="${2:?missing --stage2-memory-write-sigma value}"; shift 2 ;;
+    --stage2-memory-write-sigma=*) STAGE2_MEMORY_WRITE_SIGMA="${1#*=}"; shift ;;
     --resume-plus) FRESH_START=0; shift ;;
     --prepare-only) PREPARE_ONLY=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
@@ -149,6 +210,9 @@ fi
 if (( TRAIN_ITER < BS * NPROC )); then
   echo "train-iter must be >= bs * nproc so train_plus runs at least one iteration; got train_iter=${TRAIN_ITER}, bs=${BS}, nproc=${NPROC}" >&2
   exit 2
+fi
+if [[ "${STAGE2_CANDIDATE_MODE}" != "top1" ]]; then
+  USE_GRAPH_PEAK_SELECT=True
 fi
 
 if [[ -z "${EXP_NAME}" ]]; then
@@ -213,7 +277,7 @@ done
 } > "${RUN_DIR}/stage1_handoff.txt"
 
 EXP_CFG_OPTS="tasks ${TASK} exp_name ${EXP_NAME} bs ${BS} epochs ${EPOCHS} train_iter ${TRAIN_ITER} demo ${DEMO} num_workers ${NUM_WORKERS} sample_distribution_mode ${SAMPLE_MODE} wandb False peract.lr ${LR}"
-MVT_CFG_OPTS="stage_two True use_memory ${USE_MEMORY} use_multipeak ${USE_MULTIPEAK} num_maskmem ${NUM_MASKMEM}"
+MVT_CFG_OPTS="stage_two True use_memory ${USE_MEMORY} use_multipeak ${USE_MULTIPEAK} num_maskmem ${NUM_MASKMEM} use_graph_peak_select ${USE_GRAPH_PEAK_SELECT} graph_peak_topk ${GRAPH_PEAK_TOPK} graph_peak_select_loss_weight ${GRAPH_PEAK_SELECT_LOSS_WEIGHT} graph_peak_insert_gt_train ${GRAPH_PEAK_INSERT_GT_TRAIN} graph_peak_positive_radius ${GRAPH_PEAK_POSITIVE_RADIUS} graph_peak_nms_dist ${GRAPH_PEAK_NMS_DIST} stage2_candidate_mode ${STAGE2_CANDIDATE_MODE} stage2_candidate_train_crop ${STAGE2_CANDIDATE_TRAIN_CROP} stage2_kcrop_train_pick ${STAGE2_KCROP_TRAIN_PICK} stage2_candidate_insert_gt_train ${STAGE2_CANDIDATE_INSERT_GT_TRAIN} stage2_memory_write_mode ${STAGE2_MEMORY_WRITE_MODE} stage2_memory_write_topk ${STAGE2_MEMORY_WRITE_TOPK} stage2_memory_write_temperature ${STAGE2_MEMORY_WRITE_TEMPERATURE} stage2_memory_write_sigma ${STAGE2_MEMORY_WRITE_SIGMA}"
 
 TRAIN_CMD=(
   torchrun
@@ -239,6 +303,9 @@ echo "[stage2-oracle] stage1=${STAGE1_CKPT}"
 echo "[stage2-oracle] run_dir=${RUN_DIR}"
 echo "[stage2-oracle] master_port=${MASTER_PORT}"
 echo "[stage2-oracle] use_memory=${USE_MEMORY} use_multipeak=${USE_MULTIPEAK}"
+echo "[stage2-oracle] use_graph_peak_select=${USE_GRAPH_PEAK_SELECT} topk=${GRAPH_PEAK_TOPK} insert_gt_train=${GRAPH_PEAK_INSERT_GT_TRAIN}"
+echo "[stage2-oracle] stage2_candidate_mode=${STAGE2_CANDIDATE_MODE} train_crop=${STAGE2_CANDIDATE_TRAIN_CROP} kcrop_pick=${STAGE2_KCROP_TRAIN_PICK}"
+echo "[stage2-oracle] memory_write=${STAGE2_MEMORY_WRITE_MODE} memory_topk=${STAGE2_MEMORY_WRITE_TOPK} memory_temp=${STAGE2_MEMORY_WRITE_TEMPERATURE} memory_sigma=${STAGE2_MEMORY_WRITE_SIGMA}"
 
 if [[ "${PREPARE_ONLY}" == "1" ]]; then
   echo "[stage2-oracle] prepare-only done"

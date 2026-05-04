@@ -27,3 +27,15 @@ num_maskmem: 9
 # Stage1 multi-peak
 use_multipeak: True
 multipeak_targets_json: "data_memory/multipeak_targets/{task}_multipeak_both.json"
+
+# Stage2 V10 candidate interface. Defaults keep the original top1/oracle crop.
+stage2_candidate_mode: "top1"          # top1 | selector | kcrop
+stage2_candidate_train_crop: "gt"      # gt | selector | nearest_gt
+stage2_kcrop_train_pick: "target"      # target | selector
+stage2_candidate_insert_gt_train: True
+
+# V10c memory heatmap write policy.
+stage2_memory_write_mode: "stage1"     # stage1 | topk_soft | weighted_topk | selected
+stage2_memory_write_topk: 3
+stage2_memory_write_temperature: 0.25
+stage2_memory_write_sigma: 1.5

@@ -201,6 +201,49 @@ def _stage1_hm(trans: torch.Tensor) -> torch.Tensor:
     return F.softmax(logits.reshape(nc, h * w), dim=1).reshape(nc, h, w).cpu()
 
 
+def _stage1_topk_world(
+    agent,
+    hm: torch.Tensor,
+    rev_trans,
+    device: str,
+    topk_3d: int,
+    nms_dist: float,
+) -> tuple[np.ndarray, list[float]]:
+    """Return Stage1 top-K candidate crop centers in world coordinates."""
+    if topk_3d <= 0:
+        return np.zeros((0, 3), dtype=np.float32), []
+
+    renderer = agent._net_mod.mvt1.renderer
+    hm_device = hm.to(device).unsqueeze(0)
+    with torch.no_grad():
+        try:
+            topk_local = renderer.get_max_3d_frm_hm_cube(
+                hm_device,
+                fix_cam=True,
+                dyn_cam_info=None,
+                topk=topk_3d,
+                non_max_sup=True,
+                non_max_sup_dist=nms_dist,
+            )
+        except TypeError:
+            topk_local = renderer.get_max_3d_frm_hm_cube(
+                hm_device,
+                fix_cam=True,
+                dyn_cam_info=None,
+            )
+            if topk_local.dim() == 2:
+                topk_local = topk_local.unsqueeze(0)
+
+        if topk_local.dim() == 2:
+            topk_local = topk_local.unsqueeze(0)
+        topk_local = topk_local[0].to(device)
+        topk_world = rev_trans(topk_local).detach().cpu().numpy()
+
+    score_rows = _sample_target_scores(agent, hm, topk_local)
+    scores = [row["score_mean"] for row in score_rows]
+    return topk_world, scores
+
+
 def _view_peak_stats(hm: torch.Tensor, topk: int = 5) -> dict:
     ratios: list[float] = []
     p1s: list[float] = []
@@ -365,6 +408,11 @@ def _new_agg(task: str, kf: int) -> dict:
         "alt_over_gt": [],
         "gt_rank_pct": [],
         "entropy": [],
+        "topk_gt_hit": 0,
+        "topk_miss": 0,
+        "top1_fail_topk_hit": 0,
+        "topk_gt_err": [],
+        "topk_best_rank": [],
         "cause_counts": {},
     }
 
@@ -477,6 +525,14 @@ def analyze(args) -> tuple[list[dict], list[dict]]:
 
                 stage1_local = captured["stage1_wpt_local"].to(device)
                 stage1_world = rev_trans(stage1_local).detach().cpu().numpy()[0]
+                topk_world, topk_scores = _stage1_topk_world(
+                    agent,
+                    hm,
+                    rev_trans,
+                    device,
+                    args.topk_3d,
+                    args.topk_nms_dist,
+                )
                 final_world = np.asarray(act_result.action[:3], dtype=np.float32)
 
                 target_scores = _sample_target_scores(agent, hm, target_locals)
@@ -530,6 +586,13 @@ def analyze(args) -> tuple[list[dict], list[dict]]:
                         "stage1_pred_xyz": "%.4f,%.4f,%.4f" % tuple(stage1_world),
                         "final_pred_xyz": "%.4f,%.4f,%.4f" % tuple(final_world),
                         "gt_xyz": "",
+                        "topk_3d_gt_hit": "",
+                        "topk_3d_min_gt_err_m": "",
+                        "topk_3d_best_rank": "",
+                        "topk_3d_xyz": ";".join(
+                            "%.4f,%.4f,%.4f" % tuple(x) for x in topk_world
+                        ),
+                        "topk_3d_scores": ";".join(_short(x) for x in topk_scores),
                         "peak_coords": peak_stats["peaks"],
                         "target_coords": "",
                     }
@@ -555,6 +618,15 @@ def analyze(args) -> tuple[list[dict], list[dict]]:
                     off_cos=args.off_cos,
                 )
                 is_correct = gt_err <= args.correct_dist
+                if topk_world.shape[0] > 0:
+                    topk_gt_dists = np.linalg.norm(topk_world - gt[None, :], axis=1)
+                    topk_min_gt_err = float(np.min(topk_gt_dists))
+                    topk_best_rank = int(np.argmin(topk_gt_dists)) + 1
+                    topk_gt_hit = topk_min_gt_err <= args.correct_dist
+                else:
+                    topk_min_gt_err = float("nan")
+                    topk_best_rank = -1
+                    topk_gt_hit = False
 
                 if direction_pick == "gt":
                     agg["top1_gt"] += 1
@@ -568,6 +640,12 @@ def analyze(args) -> tuple[list[dict], list[dict]]:
                     agg["top1_correct"] += 1
                 else:
                     agg["top1_wrong"] += 1
+                if topk_gt_hit:
+                    agg["topk_gt_hit"] += 1
+                    if not is_correct:
+                        agg["top1_fail_topk_hit"] += 1
+                else:
+                    agg["topk_miss"] += 1
                 if status == "collapsed":
                     agg["collapsed_total"] += 1
                     if is_correct:
@@ -596,6 +674,10 @@ def analyze(args) -> tuple[list[dict], list[dict]]:
                     agg["gt_rank_pct"].append(gt_rank_pct)
                 if np.isfinite(entropy_med):
                     agg["entropy"].append(entropy_med)
+                if np.isfinite(topk_min_gt_err):
+                    agg["topk_gt_err"].append(topk_min_gt_err)
+                if topk_best_rank > 0:
+                    agg["topk_best_rank"].append(float(topk_best_rank))
 
                 detail = {
                     "task": task,
@@ -623,6 +705,13 @@ def analyze(args) -> tuple[list[dict], list[dict]]:
                     "stage1_pred_xyz": "%.4f,%.4f,%.4f" % tuple(stage1_world),
                     "final_pred_xyz": "%.4f,%.4f,%.4f" % tuple(final_world),
                     "gt_xyz": "%.4f,%.4f,%.4f" % tuple(gt),
+                    "topk_3d_gt_hit": int(topk_gt_hit),
+                    "topk_3d_min_gt_err_m": topk_min_gt_err,
+                    "topk_3d_best_rank": topk_best_rank,
+                    "topk_3d_xyz": ";".join(
+                        "%.4f,%.4f,%.4f" % tuple(x) for x in topk_world
+                    ),
+                    "topk_3d_scores": ";".join(_short(x) for x in topk_scores),
                     "peak_coords": peak_stats["peaks"],
                     "target_coords": ";".join(
                         f"{name}:{score.get('coords', '')}"
@@ -670,6 +759,11 @@ def analyze(args) -> tuple[list[dict], list[dict]]:
                 "stage1_gt_err_min_med_max_m": _fmt(agg["gt_err"]),
                 "cos_gt_min_med_max": _fmt(agg["cos_gt"]),
                 "entropy_min_med_max": _fmt(agg["entropy"]),
+                "topk_gt_hit": agg["topk_gt_hit"],
+                "topk_miss": agg["topk_miss"],
+                "top1_fail_topk_hit": agg["top1_fail_topk_hit"],
+                "topk_gt_err_min_med_max_m": _fmt(agg["topk_gt_err"]),
+                "topk_best_rank_min_med_max": _fmt(agg["topk_best_rank"], digits=1),
                 "cause_summary": cause_summary,
             }
         )
@@ -730,16 +824,17 @@ def write_outputs(summary_rows: list[dict], detail_rows: list[dict], args) -> No
         f.write("- `top1 gt/alt/tie/off` is still the direction classification from the current keyframe.\n")
         f.write("- `GT/p1` is the mean heatmap score at projected GT pixels divided by per-view peak score.\n")
         f.write("- `alt/GT` is the best alternative target score divided by GT score.\n")
-        f.write("- status uses the median p1/p2 ratio across render views: alive<=3, weak<=20, faint<=100, collapsed>100.\n\n")
+        f.write("- status uses the median p1/p2 ratio across render views: alive<=3, weak<=20, faint<=100, collapsed>100.\n")
+        f.write(f"- `topK` uses 3D NMS top-{args.topk_3d} with radius {args.topk_nms_dist:.3f}m.\n\n")
 
         for task in dict.fromkeys(row["task"] for row in summary_rows):
             f.write(f"## {task}\n\n")
             f.write(
                 "| KF | MP | peak | top1 gt/alt/tie/off | correct/wrong | "
                 "collapsed ok/wrong/total | score gt/alt/tie | GT/p1 | alt/GT | "
-                "GT err m | verdict | cause |\n"
+                "GT err m | topK hit/miss | top1 fail recovered | verdict | cause |\n"
             )
-            f.write("|---:|:---:|:---:|---:|---:|---:|---:|---:|---:|---:|---|---|\n")
+            f.write("|---:|:---:|:---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|\n")
             for row in summary_rows:
                 if row["task"] != task:
                     continue
@@ -750,7 +845,8 @@ def write_outputs(summary_rows: list[dict], detail_rows: list[dict], args) -> No
                     "{top1_correct}/{top1_wrong} | "
                     "{collapsed_correct}/{collapsed_wrong}/{collapsed_total} | "
                     "{score_pick_gt}/{score_pick_alt}/{score_pick_tie} | "
-                    "{gt_score} | {alt_gt} | {gt_err} | `{verdict}` | {cause} |\n".format(
+                    "{gt_score} | {alt_gt} | {gt_err} | {topk_hit}/{topk_miss} | "
+                    "{top1_fail_topk_hit} | `{verdict}` | {cause} |\n".format(
                         kf=row["kf"],
                         label_hits=row["label_hits"],
                         episodes=row["episodes"],
@@ -770,6 +866,9 @@ def write_outputs(summary_rows: list[dict], detail_rows: list[dict], args) -> No
                         gt_score=row["gt_score_over_p1_min_med_max"],
                         alt_gt=row["best_alt_over_gt_min_med_max"],
                         gt_err=row["stage1_gt_err_min_med_max_m"],
+                        topk_hit=row["topk_gt_hit"],
+                        topk_miss=row["topk_miss"],
+                        top1_fail_topk_hit=row["top1_fail_topk_hit"],
                         verdict=verdict,
                         cause=row["cause_summary"] or "-",
                     )
@@ -785,16 +884,17 @@ def write_outputs(summary_rows: list[dict], detail_rows: list[dict], args) -> No
             f.write("## Problem Focus\n\n")
             f.write(
                 "| task | KF | MP | peak | top1 correct/wrong | collapsed ok/wrong/total | "
-                "score gt/alt/tie | GT/p1 | alt/GT | cause |\n"
+                "score gt/alt/tie | GT/p1 | alt/GT | topK hit/miss | top1 fail recovered | cause |\n"
             )
-            f.write("|---|---:|:---:|:---:|:---:|:---:|:---:|---:|---:|---|\n")
+            f.write("|---|---:|:---:|:---:|:---:|:---:|:---:|---:|---:|---:|---:|---|\n")
             for row in bad:
                 f.write(
                     "| {task} | {kf} | {label_hits}/{episodes} | {status} | "
                     "{top1_correct}/{top1_wrong} | "
                     "{collapsed_correct}/{collapsed_wrong}/{collapsed_total} | "
                     "{score_pick_gt}/{score_pick_alt}/{score_pick_tie} | "
-                    "{gt_score} | {alt_gt} | {cause} |\n".format(
+                    "{gt_score} | {alt_gt} | {topk_hit}/{topk_miss} | "
+                    "{top1_fail_topk_hit} | {cause} |\n".format(
                         task=row["task"],
                         kf=row["kf"],
                         label_hits=row["label_hits"],
@@ -810,6 +910,9 @@ def write_outputs(summary_rows: list[dict], detail_rows: list[dict], args) -> No
                         score_pick_tie=row["score_pick_tie"],
                         gt_score=row["gt_score_over_p1_min_med_max"],
                         alt_gt=row["best_alt_over_gt_min_med_max"],
+                        topk_hit=row["topk_gt_hit"],
+                        topk_miss=row["topk_miss"],
+                        top1_fail_topk_hit=row["top1_fail_topk_hit"],
                         cause=row["cause_summary"] or "-",
                     )
                 )
@@ -829,6 +932,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tasks", default="put_block_back")
     parser.add_argument("--max-peaks", type=int, default=5)
     parser.add_argument("--topk", type=int, default=5)
+    parser.add_argument("--topk-3d", type=int, default=3)
+    parser.add_argument("--topk-nms-dist", type=float, default=0.05)
     parser.add_argument("--cos-margin", type=float, default=0.05)
     parser.add_argument("--off-cos", type=float, default=0.5)
     parser.add_argument("--correct-dist", type=float, default=0.05)
@@ -836,7 +941,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data-root",
         type=Path,
-        default=Path("/hdd3/siwon_data/sam2act/data_memory/test"),
+        default=Path("/hdd4/siwon/datasets/sam2act/data_memory/test"),
     )
     parser.add_argument(
         "--out-dir",

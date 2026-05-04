@@ -12,6 +12,11 @@ import sam2act.mvt.utils as mvt_utils
 
 from sam2act.mvt.mvt_sam2_single import MVT_SAM2_Single
 from sam2act.mvt.config import get_cfg_defaults
+from sam2act.mvt.graph_peak_selector import (
+    Stage2CandidateGraphSelector,
+    TopK3DPeakSelector,
+    nearest_candidate_targets,
+)
 # from sam2act.mvt.renderer import BoxRenderer
 
 from sam2act.mvt.sam2_train.build_sam import build_sam2_custom, build_sam2_custom_select
@@ -122,6 +127,17 @@ class MVT_SAM2(nn.Module):
         graph_contrastive_loss_weight=0.05,
         graph_contrastive_temperature=0.1,
         graph_contrastive_pos_radius=0.03,
+        graph_peak_insert_gt_train=True,
+        graph_peak_positive_radius=0.05,
+        graph_peak_nms_dist=0.05,
+        stage2_candidate_mode="top1",
+        stage2_candidate_train_crop="gt",
+        stage2_kcrop_train_pick="target",
+        stage2_candidate_insert_gt_train=True,
+        stage2_memory_write_mode="stage1",
+        stage2_memory_write_topk=3,
+        stage2_memory_write_temperature=0.25,
+        stage2_memory_write_sigma=1.5,
         renderer_device="cuda:0",
     ):
         """MultiView Transfomer
@@ -207,6 +223,53 @@ class MVT_SAM2(nn.Module):
         self.edge_bias_revisit_sigma = edge_bias_revisit_sigma
         self.edge_bias_ref_match_threshold = edge_bias_ref_match_threshold
         self.edge_bias_transition_hop = edge_bias_transition_hop
+        self.use_graph_peak_select = bool(use_graph_peak_select)
+        self.graph_peak_topk = int(graph_peak_topk)
+        self.graph_peak_insert_gt_train = bool(graph_peak_insert_gt_train)
+        self.graph_peak_positive_radius = float(graph_peak_positive_radius)
+        self.graph_peak_nms_dist = float(graph_peak_nms_dist)
+        self.stage2_candidate_mode = str(stage2_candidate_mode).lower()
+        self.stage2_candidate_train_crop = str(stage2_candidate_train_crop).lower()
+        self.stage2_kcrop_train_pick = str(stage2_kcrop_train_pick).lower()
+        self.stage2_candidate_insert_gt_train = bool(stage2_candidate_insert_gt_train)
+        self.stage2_memory_write_mode = str(stage2_memory_write_mode).lower()
+        self.stage2_memory_write_topk = int(stage2_memory_write_topk)
+        self.stage2_memory_write_temperature = float(stage2_memory_write_temperature)
+        self.stage2_memory_write_sigma = float(stage2_memory_write_sigma)
+        valid_candidate_modes = {"top1", "selector", "kcrop"}
+        if self.stage2_candidate_mode not in valid_candidate_modes:
+            raise ValueError(
+                f"stage2_candidate_mode must be one of {sorted(valid_candidate_modes)}, "
+                f"got {self.stage2_candidate_mode}"
+            )
+        valid_train_crops = {"gt", "selector", "nearest_gt"}
+        if self.stage2_candidate_train_crop not in valid_train_crops:
+            raise ValueError(
+                f"stage2_candidate_train_crop must be one of {sorted(valid_train_crops)}, "
+                f"got {self.stage2_candidate_train_crop}"
+            )
+        valid_kcrop_picks = {"target", "selector"}
+        if self.stage2_kcrop_train_pick not in valid_kcrop_picks:
+            raise ValueError(
+                f"stage2_kcrop_train_pick must be one of {sorted(valid_kcrop_picks)}, "
+                f"got {self.stage2_kcrop_train_pick}"
+            )
+        self.graph_peak_selector = None
+        if self.stage2_candidate_mode in {"selector", "kcrop"}:
+            self.graph_peak_selector = Stage2CandidateGraphSelector(
+                topk=self.graph_peak_topk,
+                proprio_dim=proprio_dim,
+                lang_dim=lang_dim,
+                hidden_dim=graph_node_embed_dim,
+                max_views=self.num_img,
+            )
+        elif self.use_graph_peak_select:
+            self.graph_peak_selector = TopK3DPeakSelector(
+                topk=self.graph_peak_topk,
+                proprio_dim=proprio_dim,
+                lang_dim=lang_dim,
+                hidden_dim=graph_node_embed_dim,
+            )
 
         if self.ifSAM2:
             # sam2 = build_sam2_custom(self.sam2_config, self.sam2_ckpt, device="cuda", image_size=self.img_size if not self.resize_rgb else 256) #, num_maskmem=self.num_maskmem)
@@ -312,6 +375,236 @@ class MVT_SAM2(nn.Module):
             wpt = out["rev_trans"](wpt)
 
         return wpt
+
+    def _extract_topk_stage1_candidates(self, trans):
+        bs, nc, _, h, w = trans.shape
+        hm = torch.softmax(trans.float().view(bs, nc, h * w), dim=-1).view(bs, nc, h, w)
+        candidates = []
+        with torch.no_grad():
+            for i in range(bs):
+                try:
+                    pts = self.mvt1.renderer.get_max_3d_frm_hm_cube(
+                        hm[i : i + 1],
+                        fix_cam=True,
+                        dyn_cam_info=None,
+                        topk=self.graph_peak_topk,
+                        non_max_sup=True,
+                        non_max_sup_dist=self.graph_peak_nms_dist,
+                    )
+                except TypeError:
+                    pts = self.mvt1.renderer.get_max_3d_frm_hm_cube(
+                        hm[i : i + 1],
+                        fix_cam=True,
+                        dyn_cam_info=None,
+                    )
+                    if pts.dim() == 2:
+                        pts = pts.unsqueeze(1)
+                    pts = pts.expand(-1, self.graph_peak_topk, -1)
+                if pts.dim() == 2:
+                    pts = pts.unsqueeze(0)
+                candidates.append(pts[0])
+        return torch.stack(candidates, dim=0).to(device=trans.device)
+
+    def _sample_candidate_scores(self, trans, candidate_xyz):
+        bs, nc, _, h, w = trans.shape
+        k = candidate_xyz.shape[1]
+        hm = torch.softmax(trans.float().view(bs, nc, h * w), dim=-1).view(bs, nc, h, w)
+        pt_img = self.get_pt_loc_on_img(
+            candidate_xyz,
+            mvt1_or_mvt2=True,
+            dyn_cam_info=None,
+            out=None,
+        )
+        xs = torch.round(pt_img[..., 0]).long().clamp(0, w - 1)
+        ys = torch.round(pt_img[..., 1]).long().clamp(0, h - 1)
+        batch_idx = torch.arange(bs, device=trans.device).view(bs, 1, 1).expand(bs, k, nc)
+        view_idx = torch.arange(nc, device=trans.device).view(1, 1, nc).expand(bs, k, nc)
+        view_scores = hm[batch_idx, view_idx, ys, xs]
+        scores = view_scores.mean(dim=-1).to(dtype=trans.dtype)
+        return scores, view_scores.to(dtype=trans.dtype), pt_img
+
+    def _attach_graph_peak_outputs(self, out, proprio, lang_emb, gt_wpt_local):
+        if self.graph_peak_selector is None:
+            return
+
+        candidate_xyz = self._extract_topk_stage1_candidates(out["trans"])
+        if gt_wpt_local is not None:
+            _, pred_topk_dist, pred_topk_covered = nearest_candidate_targets(
+                candidate_xyz.float(),
+                gt_wpt_local.float(),
+                self.graph_peak_positive_radius,
+            )
+            out["graph_peak_pred_topk_covered"] = pred_topk_covered.detach()
+            out["graph_peak_pred_topk_target_dist"] = pred_topk_dist.detach()
+        insert_gt_cfg = (
+            self.stage2_candidate_insert_gt_train
+            if self.stage2_candidate_mode in {"selector", "kcrop"}
+            else self.graph_peak_insert_gt_train
+        )
+        insert_gt = self.training and gt_wpt_local is not None and insert_gt_cfg
+        if insert_gt:
+            candidate_xyz = candidate_xyz.clone()
+            candidate_xyz[:, -1, :] = gt_wpt_local.detach().to(candidate_xyz.dtype)
+
+        candidate_scores, candidate_view_scores, candidate_uv = self._sample_candidate_scores(
+            out["trans"],
+            candidate_xyz,
+        )
+        logits = self.graph_peak_selector(
+            candidate_xyz=candidate_xyz,
+            candidate_scores=candidate_scores,
+            proprio=proprio,
+            lang_emb=lang_emb,
+            candidate_view_scores=candidate_view_scores,
+        )
+
+        out["graph_peak_logits"] = logits
+        out["graph_peak_candidate_xyz"] = candidate_xyz.detach()
+        out["graph_peak_candidate_scores"] = candidate_scores.detach()
+        out["stage2_candidate_mode"] = self.stage2_candidate_mode
+        out["stage2_candidate_xyz"] = candidate_xyz.detach()
+        out["stage2_candidate_scores"] = candidate_scores.detach()
+        out["stage2_candidate_view_scores"] = candidate_view_scores.detach()
+        out["stage2_candidate_uv"] = candidate_uv.detach()
+
+        if gt_wpt_local is not None:
+            target_idx, target_dist, covered = nearest_candidate_targets(
+                candidate_xyz.float(),
+                gt_wpt_local.float(),
+                self.graph_peak_positive_radius,
+            )
+            out["graph_peak_target_idx"] = target_idx
+            out["graph_peak_target_dist"] = target_dist.detach()
+            out["graph_peak_covered"] = covered.detach()
+
+    def _select_graph_peak_wpt(self, out, use_target=False):
+        if "graph_peak_logits" not in out or "graph_peak_candidate_xyz" not in out:
+            return None
+        if use_target and "graph_peak_target_idx" in out:
+            idx = out["graph_peak_target_idx"]
+        else:
+            idx = out["graph_peak_logits"].argmax(dim=-1)
+        bs = idx.shape[0]
+        batch_idx = torch.arange(bs, device=idx.device)
+        selected = out["graph_peak_candidate_xyz"][batch_idx, idx]
+        out["graph_peak_selected_idx"] = idx.detach()
+        out["graph_peak_selected_wpt_local"] = selected.detach()
+        return selected.detach()
+
+    def _select_stage2_train_candidate(self, out):
+        if self.stage2_candidate_train_crop == "selector":
+            return self._select_graph_peak_wpt(out, use_target=False)
+        if self.stage2_candidate_train_crop == "nearest_gt":
+            return self._select_graph_peak_wpt(out, use_target=True)
+        return None
+
+    def _run_mvt2_for_crop(
+        self,
+        pc,
+        img_feat,
+        proprio,
+        lang_emb,
+        img_aug,
+        crop_center,
+        target_wpt_local,
+        rot_x_y,
+        kwargs,
+    ):
+        crop_center = crop_center.detach()
+        with torch.no_grad():
+            pc_crop, rev_trans = mvt_utils.trans_pc(
+                pc,
+                loc=crop_center,
+                sca=self.st_sca,
+            )
+            if self.training and target_wpt_local is not None:
+                wpt_local2, _ = mvt_utils.trans_pc(
+                    target_wpt_local,
+                    loc=crop_center,
+                    sca=self.st_sca,
+                )
+            else:
+                wpt_local2 = None
+            img = self.render(
+                pc=pc_crop,
+                img_feat=img_feat,
+                img_aug=img_aug,
+                mvt1_or_mvt2=False,
+                dyn_cam_info=None,
+            )
+
+        out_mvt2 = self.mvt2(
+            img=img,
+            proprio=proprio,
+            lang_emb=lang_emb,
+            wpt_local=wpt_local2,
+            rot_x_y=rot_x_y,
+            **kwargs,
+        )
+        return out_mvt2, rev_trans
+
+    def _gather_mvt2_branch(self, branches, selected_idx):
+        selected = {}
+        bs = selected_idx.shape[0]
+        for key in branches[0].keys():
+            values = [branch[key] for branch in branches if key in branch]
+            if len(values) != len(branches):
+                continue
+            if torch.is_tensor(values[0]) and values[0].shape[0] == bs:
+                stacked = torch.stack(values, dim=0)
+                gather_shape = [1, bs] + list(stacked.shape[2:])
+                gather_idx = selected_idx.view(1, bs, *([1] * (stacked.dim() - 2)))
+                gather_idx = gather_idx.expand(*gather_shape)
+                selected[key] = stacked.gather(dim=0, index=gather_idx).squeeze(0)
+            else:
+                selected[key] = values[0]
+        return selected
+
+    def _forward_stage2_kcrop(
+        self,
+        out,
+        pc,
+        img_feat,
+        proprio,
+        lang_emb,
+        img_aug,
+        target_wpt_local,
+        rot_x_y,
+        kwargs,
+    ):
+        if "graph_peak_candidate_xyz" not in out:
+            return None
+        candidate_xyz = out["graph_peak_candidate_xyz"]
+        bs, k, _ = candidate_xyz.shape
+        branches = []
+        for cand_idx in range(k):
+            branch, _ = self._run_mvt2_for_crop(
+                pc=pc,
+                img_feat=img_feat,
+                proprio=proprio,
+                lang_emb=lang_emb,
+                img_aug=img_aug,
+                crop_center=candidate_xyz[:, cand_idx, :],
+                target_wpt_local=target_wpt_local,
+                rot_x_y=rot_x_y,
+                kwargs=kwargs,
+            )
+            branches.append(branch)
+
+        if self.training and self.stage2_kcrop_train_pick == "target" and "graph_peak_target_idx" in out:
+            selected_idx = out["graph_peak_target_idx"]
+        elif "graph_peak_logits" in out:
+            selected_idx = out["graph_peak_logits"].argmax(dim=-1)
+        else:
+            selected_idx = candidate_xyz.new_zeros(bs, dtype=torch.long)
+
+        batch_idx = torch.arange(bs, device=candidate_xyz.device)
+        selected_center = candidate_xyz[batch_idx, selected_idx].detach()
+        _, rev_trans = mvt_utils.trans_pc(pc, loc=selected_center, sca=self.st_sca)
+        out["stage2_kcrop_selected_idx"] = selected_idx.detach()
+        out["stage2_kcrop_candidate_xyz"] = candidate_xyz.detach()
+        out["stage2_kcrop_logits"] = out.get("graph_peak_logits", None)
+        return self._gather_mvt2_branch(branches, selected_idx), rev_trans, selected_center
 
     def render(self, pc, img_feat, img_aug, mvt1_or_mvt2, dyn_cam_info):
         assert isinstance(mvt1_or_mvt2, bool)
@@ -534,28 +827,74 @@ class MVT_SAM2(nn.Module):
             # hm_gt=hm_gt,
             **kwargs,
         )
+        if self.graph_peak_selector is not None:
+            self._attach_graph_peak_outputs(
+                out=out,
+                proprio=proprio,
+                lang_emb=lang_emb,
+                gt_wpt_local=wpt_local_stage_one,
+            )
 
         if self.stage_two and (not self.use_memory or not self.training):
+            if self.stage2_candidate_mode == "kcrop" and (
+                self.training or wpt_local_stage_one is None
+            ):
+                kcrop = self._forward_stage2_kcrop(
+                    out=out,
+                    pc=pc,
+                    img_feat=img_feat,
+                    proprio=proprio,
+                    lang_emb=lang_emb,
+                    img_aug=img_aug,
+                    target_wpt_local=wpt_local if self.training else None,
+                    rot_x_y=rot_x_y,
+                    kwargs=kwargs,
+                )
+                if kcrop is not None:
+                    out_mvt2, rev_trans, selected_center = kcrop
+                    out["wpt_local1"] = selected_center
+                    out["rev_trans"] = rev_trans
+                    out["mvt2"] = out_mvt2
+                    return out
+
             with torch.no_grad():
                 # adding then noisy location for training
                 if self.training:
-                    # noise is added so that the wpt_local2 is not exactly at
-                    # the center of the pc
-                    wpt_local_stage_one_noisy = mvt_utils.add_uni_noi(
-                        wpt_local_stage_one.clone().detach(), 2 * self.st_wpt_loc_aug
-                    )
-                    pc, rev_trans = mvt_utils.trans_pc(
-                        pc, loc=wpt_local_stage_one_noisy, sca=self.st_sca
-                    )
-
-                    if self.st_wpt_loc_inp_no_noise:
+                    selected_train_crop = None
+                    if self.stage2_candidate_mode == "selector":
+                        selected_train_crop = self._select_stage2_train_candidate(out)
+                    if selected_train_crop is not None:
+                        crop_center = selected_train_crop.clone().detach()
+                        if self.st_wpt_loc_aug != 0:
+                            crop_center = mvt_utils.add_uni_noi(
+                                crop_center,
+                                2 * self.st_wpt_loc_aug,
+                            )
+                        wpt_local_stage_one_noisy = crop_center
+                        pc, rev_trans = mvt_utils.trans_pc(
+                            pc, loc=crop_center, sca=self.st_sca
+                        )
                         wpt_local2, _ = mvt_utils.trans_pc(
-                            wpt_local, loc=wpt_local_stage_one_noisy, sca=self.st_sca
+                            wpt_local, loc=crop_center, sca=self.st_sca
                         )
                     else:
-                        wpt_local2, _ = mvt_utils.trans_pc(
-                            wpt_local, loc=wpt_local_stage_one, sca=self.st_sca
+                        # noise is added so that the wpt_local2 is not exactly
+                        # at the center of the pc
+                        wpt_local_stage_one_noisy = mvt_utils.add_uni_noi(
+                            wpt_local_stage_one.clone().detach(), 2 * self.st_wpt_loc_aug
                         )
+                        pc, rev_trans = mvt_utils.trans_pc(
+                            pc, loc=wpt_local_stage_one_noisy, sca=self.st_sca
+                        )
+
+                        if self.st_wpt_loc_inp_no_noise:
+                            wpt_local2, _ = mvt_utils.trans_pc(
+                                wpt_local, loc=wpt_local_stage_one_noisy, sca=self.st_sca
+                            )
+                        else:
+                            wpt_local2, _ = mvt_utils.trans_pc(
+                                wpt_local, loc=wpt_local_stage_one, sca=self.st_sca
+                            )
 
                 else:
                     # bs, 3. During oracle-stage1 rollout, wpt_local is the
@@ -589,10 +928,12 @@ class MVT_SAM2(nn.Module):
                             self.img_size,
                         ).to(dtype=out["trans"].dtype, device=out["trans"].device)
                     else:
-                        wpt_local = self.get_wpt(
-                            out, y_q=None, mvt1_or_mvt2=True,
-                            dyn_cam_info=None,
-                        )
+                        wpt_local = self._select_graph_peak_wpt(out)
+                        if wpt_local is None:
+                            wpt_local = self.get_wpt(
+                                out, y_q=None, mvt1_or_mvt2=True,
+                                dyn_cam_info=None,
+                            )
                     pc, rev_trans = mvt_utils.trans_pc(
                         pc, loc=wpt_local, sca=self.st_sca
                     )

@@ -88,6 +88,25 @@ _C.graph_transition_loss_weight = 0.1
 _C.graph_contrastive_loss_weight = 0.05
 _C.graph_contrastive_temperature = 0.1
 _C.graph_contrastive_pos_radius = 0.03
+_C.graph_peak_insert_gt_train = True
+_C.graph_peak_positive_radius = 0.05
+_C.graph_peak_nms_dist = 0.05
+
+# Stage2 V10 candidate interface
+# top1: original/V9 single crop behavior
+# selector: V10a, graph selector chooses one Stage1 candidate crop
+# kcrop: V10b, run Stage2 on K candidate crops and keep the selected branch
+_C.stage2_candidate_mode = "top1"
+_C.stage2_candidate_train_crop = "gt"  # "gt", "selector", "nearest_gt"
+_C.stage2_kcrop_train_pick = "target"  # "target", "selector"
+_C.stage2_candidate_insert_gt_train = True
+
+# V10c memory write formatting for SAM2Act+ memory paths.
+# stage1 keeps raw logits; topk_soft/selected write sparse normalized masks.
+_C.stage2_memory_write_mode = "stage1"
+_C.stage2_memory_write_topk = 3
+_C.stage2_memory_write_temperature = 0.25
+_C.stage2_memory_write_sigma = 1.5
 
 _C.sam2_config = '/configs/sam2.1/sam2.1_hiera_b+'
 _C.sam2_ckpt = './mvt/sam2_train/checkpoints/sam2.1_hiera_base_plus.pt'
